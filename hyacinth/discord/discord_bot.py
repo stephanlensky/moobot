@@ -13,16 +13,9 @@ from discord import Member, Message, Reaction, Thread, User
 
 from hyacinth.db.notifier import get_discord_notifiers as get_discord_notifiers_from_db
 from hyacinth.db.notifier import save_notifier as save_notifier_to_db
-from hyacinth.discord.commands.delete import delete_notifier
-from hyacinth.discord.commands.edit import edit
-from hyacinth.discord.commands.filter import filter_, is_valid_string_filter_command
-from hyacinth.discord.commands.help import show_help
-from hyacinth.discord.commands.notify import create_notifier
-from hyacinth.discord.commands.show import show
-from hyacinth.discord.commands.stats import stats
 from hyacinth.discord.thread_interaction import ThreadInteraction
 from hyacinth.monitor import MarketplaceMonitor
-from hyacinth.notifier import DiscordNotifier, ListingNotifier
+from hyacinth.notifier import DiscordNotifier
 from hyacinth.plugin import register_plugin
 from hyacinth.settings import get_settings
 
@@ -202,94 +195,94 @@ class DiscordNotifierBot:
             return False
         return True
 
-    @command(r"help")
-    async def help(self, message: Message, _command: re.Match) -> None:
-        await show_help(self, message, None)
+    # @command(r"help")
+    # async def help(self, message: Message, _command: re.Match) -> None:
+    #     await show_help(self, message, None)
 
-    @command(r"notify$")
-    async def invalid_create_notifier_command(self, message: Message, _command: re.Match) -> None:
-        """
-        This is a common mistake for first users of the bot.
+    # @command(r"notify$")
+    # async def invalid_create_notifier_command(self, message: Message, _command: re.Match) -> None:
+    #     """
+    #     This is a common mistake for first users of the bot.
 
-        Handle as a command and provide an appropriate error message.
-        """
-        await message.channel.send(
-            f"Sorry {message.author.mention}, you must provide a source for notifications! For"
-            " example, `$notify craigslist`. For more information, see `$help notify`."
-        )
+    #     Handle as a command and provide an appropriate error message.
+    #     """
+    #     await message.channel.send(
+    #         f"Sorry {message.author.mention}, you must provide a source for notifications! For"
+    #         " example, `$notify craigslist`. For more information, see `$help notify`."
+    #     )
 
-    @command(r"notify (?P<plugin_name>.+?)( (?P<params>(\w+=[\w-]+ ?)+)$|$)")
-    async def create_notifier(self, message: Message, command: re.Match) -> None:
-        plugin_name: str = command.group("plugin_name").lower()
-        params: dict[str, str] | None = None
-        if command.group("params"):
-            params = dict((p.split("=") for p in command.group("params").split(" ")))
-        _logger.info(f"Received request to create notifier from {plugin_name=} {params=}")
+    # @command(r"notify (?P<plugin_name>.+?)( (?P<params>(\w+=[\w-]+ ?)+)$|$)")
+    # async def create_notifier(self, message: Message, command: re.Match) -> None:
+    #     plugin_name: str = command.group("plugin_name").lower()
+    #     params: dict[str, str] | None = None
+    #     if command.group("params"):
+    #         params = dict((p.split("=") for p in command.group("params").split(" ")))
+    #     _logger.info(f"Received request to create notifier from {plugin_name=} {params=}")
 
-        await create_notifier(self, message, plugin_name, params)
+    #     await create_notifier(self, message, plugin_name, params)
 
-    @command(r"delete")
-    @pass_notifier(save_changes=False)
-    async def delete_notifier(
-        self, message: Message, _command: re.Match, notifier: ListingNotifier
-    ) -> None:
-        await delete_notifier(self, message, notifier)
+    # @command(r"delete")
+    # @pass_notifier(save_changes=False)
+    # async def delete_notifier(
+    #     self, message: Message, _command: re.Match, notifier: ListingNotifier
+    # ) -> None:
+    #     await delete_notifier(self, message, notifier)
 
-    @command(r"(pause|stop)")
-    @pass_notifier(save_changes=True)
-    async def pause(self, message: Message, _command: re.Match, notifier: ListingNotifier) -> None:
-        notifier.pause()
-        await message.channel.send(
-            f"{self.affirm()} {message.author.mention}, I've paused notifications for this channel."
-        )
+    # @command(r"(pause|stop)")
+    # @pass_notifier(save_changes=True)
+    # async def pause(self, message: Message, _command: re.Match, notifier: ListingNotifier) -> None:
+    #     notifier.pause()
+    #     await message.channel.send(
+    #         f"{self.affirm()} {message.author.mention}, I've paused notifications for this channel."
+    #     )
 
-    @command(r"(unpause|start)")
-    @pass_notifier(save_changes=True)
-    async def unpause(
-        self, message: Message, _command: re.Match, notifier: ListingNotifier
-    ) -> None:
-        # send response first to ensure resumed notifications appear after this message
-        await message.channel.send(
-            f"{self.affirm()} {message.author.mention}, I've resumed notifications for this"
-            " channel."
-        )
-        notifier.unpause()
+    # @command(r"(unpause|start)")
+    # @pass_notifier(save_changes=True)
+    # async def unpause(
+    #     self, message: Message, _command: re.Match, notifier: ListingNotifier
+    # ) -> None:
+    #     # send response first to ensure resumed notifications appear after this message
+    #     await message.channel.send(
+    #         f"{self.affirm()} {message.author.mention}, I've resumed notifications for this"
+    #         " channel."
+    #     )
+    #     notifier.unpause()
 
-    @command(r"filter (?P<field>.+?) (?P<filter_command>.+)")
-    @pass_notifier(save_changes=True)
-    async def filter(self, message: Message, command: re.Match, notifier: ListingNotifier) -> None:
-        field: str = command.group("field")
-        filter_command: str = command.group("filter_command")
+    # @command(r"filter (?P<field>.+?) (?P<filter_command>.+)")
+    # @pass_notifier(save_changes=True)
+    # async def filter(self, message: Message, command: re.Match, notifier: ListingNotifier) -> None:
+    #     field: str = command.group("field")
+    #     filter_command: str = command.group("filter_command")
 
-        # allow shorthand to default to "title" field
-        if is_valid_string_filter_command(f"{field} {filter_command}"):
-            filter_command = f"{field} {filter_command}"
-            field = "title"
+    #     # allow shorthand to default to "title" field
+    #     if is_valid_string_filter_command(f"{field} {filter_command}"):
+    #         filter_command = f"{field} {filter_command}"
+    #         field = "title"
 
-        await filter_(self, message, notifier, field, filter_command)
+    #     await filter_(self, message, notifier, field, filter_command)
 
-    @command(r"(show-filter|show)")
-    @pass_notifier(save_changes=False)
-    async def show(self, message: Message, _command: re.Match, notifier: ListingNotifier) -> None:
-        await show(self, message, notifier)
+    # @command(r"(show-filter|show)")
+    # @pass_notifier(save_changes=False)
+    # async def show(self, message: Message, _command: re.Match, notifier: ListingNotifier) -> None:
+    #     await show(self, message, notifier)
 
-    @command(r"(edit-filter|edit)( (?P<field>.+))?")
-    @pass_notifier(save_changes=True)
-    async def edit(self, message: Message, command: re.Match, notifier: ListingNotifier) -> None:
-        field: str | None = command.group("field")
+    # @command(r"(edit-filter|edit)( (?P<field>.+))?")
+    # @pass_notifier(save_changes=True)
+    # async def edit(self, message: Message, command: re.Match, notifier: ListingNotifier) -> None:
+    #     field: str | None = command.group("field")
 
-        # allow shorthand to default to "title" field
-        if field is None:
-            field = "title"
+    #     # allow shorthand to default to "title" field
+    #     if field is None:
+    #         field = "title"
 
-        await edit(self, message, notifier, field)
+    #     await edit(self, message, notifier, field)
 
-    @command(r"stats( (?P<channel><#\d+>))?")
-    async def stats(self, message: Message, command: re.Match) -> None:
-        channel_id: int | None = None
-        if command.group("channel"):
-            channel_id = message.channel_mentions[0].id
-        await stats(self, message, channel_id)
+    # @command(r"stats( (?P<channel><#\d+>))?")
+    # async def stats(self, message: Message, command: re.Match) -> None:
+    #     channel_id: int | None = None
+    #     if command.group("channel"):
+    #         channel_id = message.channel_mentions[0].id
+    #     await stats(self, message, channel_id)
 
 
 async def start() -> None:
