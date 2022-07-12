@@ -1,12 +1,12 @@
 [tool.poetry]
-name = "hyacinth"
+name = "moobot"
 version = "0.0.1"
-description = "A Discord bot to send notifications for marketplace (Craigslist, Facebook) postings based on complex matching rules."
+description = "Private server management bot."
 authors = ["Stephan Lensky <public@slensky.com>"]
 readme = "README.md"
 license = "AGPL-3.0-only"
-homepage = "https://github.com/stephanlensky/hyacinth"
-repository = "https://github.com/stephanlensky/hyacinth"
+homepage = "https://github.com/stephanlensky/moobot"
+repository = "https://github.com/stephanlensky/moobot"
 include = [
     "LICENSE",
 ]
