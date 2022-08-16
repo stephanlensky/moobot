@@ -1,6 +1,6 @@
 import asyncio
 
-from hyacinth.discord import discord_bot
+from moobot.discord import discord_bot
 
 
 def run_discord_bot() -> None:

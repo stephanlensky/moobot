@@ -7,8 +7,8 @@ This migration changes all craigslist search_specs to no longer include max dist
 
 import json
 
-from hyacinth.db.models import DbDiscordNotifier, DbListing
-from hyacinth.db.session import Session
+from moobot.db.models import DbDiscordNotifier, DbListing
+from moobot.db.session import Session
 
 
 def update_notifiers() -> None:

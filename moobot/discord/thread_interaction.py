@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from discord import Message, Reaction, Thread
 
 if TYPE_CHECKING:
-    from hyacinth.discord.discord_bot import DiscordNotifierBot
+    from moobot.discord.discord_bot import DiscordNotifierBot
 
 FMT_USER = "{user}"
 DEFAULT_ERROR_RESPONSE = f"Sorry {FMT_USER}, I didn't recognize that. Please try again."

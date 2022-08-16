@@ -1,8 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from hyacinth.db.models import Base
-from hyacinth.settings import get_settings
+from moobot.settings import get_settings
 
 settings = get_settings()
 
@@ -12,4 +11,3 @@ connection_string = f"postgresql://{credentials}@{host}"
 
 engine = create_engine(f"postgresql://{credentials}@{host}", future=True)
 Session = sessionmaker(engine)
-Base.metadata.create_all(engine)

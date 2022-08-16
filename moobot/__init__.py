@@ -1,7 +1,7 @@
 import logging
 import sys
 
-from hyacinth.settings import get_settings
+from moobot.settings import get_settings
 
 
 def _configure_logging() -> None:

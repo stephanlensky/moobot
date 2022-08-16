@@ -7,8 +7,8 @@ This migration adds filter_type=string to all filters missing the discriminator.
 
 import json
 
-from hyacinth.db.models import DbDiscordNotifier
-from hyacinth.db.session import Session
+from moobot.db.models import DbDiscordNotifier
+from moobot.db.session import Session
 
 
 def main() -> None:

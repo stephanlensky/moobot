@@ -1,2 +1,2 @@
 #!/bin/sh
-poetry run hyacinth
+poetry run moobot
