@@ -12,7 +12,7 @@ import discord
 from discord import Member, Message, Reaction, Thread, User
 
 from moobot.discord.thread_interaction import ThreadInteraction
-from moobot.load_events import load_events_from_file
+from moobot.events import load_events_from_file
 from moobot.settings import get_settings
 
 settings = get_settings()
@@ -39,9 +39,6 @@ class DiscordNotifierBot:
 
         self.active_threads: dict[int, ThreadInteraction] = {}  # thread ID -> setup handler
         self.reaction_handlers: dict[int, ReactionHandler] = {}  # message ID -> reaction handler
-
-        # moobloom stuff
-        load_events_from_file(Path("moobloom_events.yml"))
 
     def get_command_from_message(self, message: Message) -> str | None:
         """
@@ -150,6 +147,7 @@ async def start() -> None:
     @client.event
     async def on_ready() -> None:
         _logger.info(f"We have logged in as {client.user}")
+        load_events_from_file(client, Path("moobloom_events.yml"))
 
     @client.event
     async def on_message(message: Message) -> None:

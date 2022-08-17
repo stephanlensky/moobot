@@ -15,6 +15,10 @@ class Settings(BaseSettings):
 
     discord_token: str
 
+    # event listing config
+    calendar_channel_id: int
+    event_announce_channel_id: int
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

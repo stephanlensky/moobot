@@ -1,5 +1,5 @@
 events:
-  - name: Moonrise 2022
-    role_name: moonrise-2022
-    channel_name: moonrise-2022
-    date: "2022-08-06"
+  - name: Electric Zoo 2022
+    channel_name: ezoo-2022
+    start_date: "2022-09-01"
+    end_date: "2022-09-03"
