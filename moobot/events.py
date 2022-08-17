@@ -21,13 +21,13 @@ def load_events_from_file(client: discord.Client, path: Path) -> None:
     with Session() as session:
         existing_event_names = {n[0] for n in session.query(MoobloomEvent.name).all()}
 
-        new_events = []
-        for event in events:
-            if event["name"] in existing_event_names:
-                continue
+    new_events = []
+    for event in events:
+        if event["name"] in existing_event_names:
+            continue
 
-            _logger.info(f"Found event {event['name']}")
-            new_events.append(MoobloomEvent.parse_obj(event))
+        _logger.info(f"Found event {event['name']}")
+        new_events.append(MoobloomEvent.parse_obj(event))
 
     for event in new_events:
         create_event(client, event)
