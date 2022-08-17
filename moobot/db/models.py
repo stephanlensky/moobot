@@ -20,6 +20,8 @@ class MoobloomEvent(SQLModel, table=True):
     url: str | None
     image_url: str | None
 
+    announcement_message_id: str | None
+
 
 class MoobloomEventAttendanceType(str, Enum):
     ATTENDING = "attending"
