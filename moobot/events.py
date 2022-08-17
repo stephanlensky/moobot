@@ -24,6 +24,7 @@ def read_events_from_file(path: Path) -> list[MoobloomEvent]:
     with path.open("r", encoding="utf-8") as f:
         events = yaml.safe_load(f)["events"]
 
+    # there is a typing bug with parse_obj in the current version of sqlmodel
     return [MoobloomEvent.parse_obj(event) for event in events]  # type: ignore
 
 
