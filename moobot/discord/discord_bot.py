@@ -5,6 +5,7 @@ import logging
 import random
 import re
 import traceback
+from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Pattern
 
@@ -12,7 +13,7 @@ import discord
 from discord import Member, Message, Reaction, Thread, User
 
 from moobot.discord.thread_interaction import ThreadInteraction
-from moobot.events import load_events_from_file
+from moobot.events import add_reaction_handlers, load_events_from_file
 from moobot.settings import get_settings
 
 settings = get_settings()
@@ -24,10 +25,16 @@ AFFIRMATIONS = ["Okay", "Sure", "Sounds good", "No problem", "Roger that", "Got 
 THANKS = [*AFFIRMATIONS, "Thanks", "Thank you"]
 DEBUG_COMMAND_PREFIX = r"(d|debug) "
 
-ReactionHandler = Callable[[Reaction, User | Member], Coroutine[None, Any, Any]]
+
+class ReactionAction(str, Enum):
+    ADDED = "added"
+    REMOVED = "removed"
 
 
-class DiscordNotifierBot:
+ReactionHandler = Callable[[ReactionAction, Reaction, User | Member], Coroutine[None, Any, Any]]
+
+
+class DiscordBot:
     def __init__(
         self,
         client: discord.Client,
@@ -96,7 +103,9 @@ class DiscordNotifierBot:
                     raise
                 break
 
-    async def on_reaction_added(self, reaction: Reaction, user: Member | User) -> None:
+    async def on_reaction_change(
+        self, action: ReactionAction, reaction: Reaction, user: Member | User
+    ) -> None:
         # if the reaction is on a message in a thread with an active interaction, pass it to the
         # interaction reaction handler
         message = reaction.message
@@ -111,7 +120,7 @@ class DiscordNotifierBot:
 
         # otherwise check if there are any registered handlers for reactions on this message
         if message.id in self.reaction_handlers:
-            await self.reaction_handlers[message.id](reaction, user)
+            await self.reaction_handlers[message.id](action, reaction, user)
 
     @staticmethod
     def command(r: str) -> Callable[..., Any]:
@@ -142,12 +151,13 @@ async def start() -> None:
         messages=True, guild_messages=True, message_content=True, guilds=True, reactions=True
     )
     client = discord.Client(intents=intents, loop=loop)
-    discord_bot: DiscordNotifierBot = DiscordNotifierBot(client)
+    discord_bot: DiscordBot = DiscordBot(client)
 
     @client.event
     async def on_ready() -> None:
         _logger.info(f"We have logged in as {client.user}")
         load_events_from_file(client, Path("moobloom_events.yml"))
+        add_reaction_handlers(discord_bot)
 
     @client.event
     async def on_message(message: Message) -> None:
@@ -155,6 +165,10 @@ async def start() -> None:
 
     @client.event
     async def on_reaction_add(reaction: Reaction, user: Member | User) -> None:
-        await discord_bot.on_reaction_added(reaction, user)
+        await discord_bot.on_reaction_change(ReactionAction.ADDED, reaction, user)
+
+    @client.event
+    async def on_reaction_removed(reaction: Reaction, user: Member | User) -> None:
+        await discord_bot.on_reaction_change(ReactionAction.REMOVED, reaction, user)
 
     await client.start(settings.discord_token)

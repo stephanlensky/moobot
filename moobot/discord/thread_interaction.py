@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Callable
 from discord import Message, Reaction, Thread
 
 if TYPE_CHECKING:
-    from moobot.discord.discord_bot import DiscordNotifierBot
+    from moobot.discord.discord_bot import DiscordBot
 
 FMT_USER = "{user}"
 DEFAULT_ERROR_RESPONSE = f"Sorry {FMT_USER}, I didn't recognize that. Please try again."
@@ -28,7 +28,7 @@ class Question:
 class ThreadInteraction:
     def __init__(
         self,
-        bot: DiscordNotifierBot,
+        bot: DiscordBot,
         initiating_message: Message,
         thread_title: str,
         first_message: str | None,

@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import discord
 import yaml
@@ -8,6 +11,9 @@ from discord import Message
 from moobot.db.models import MoobloomEvent
 from moobot.db.session import Session
 from moobot.settings import get_settings
+
+if TYPE_CHECKING:
+    from moobot.discord.discord_bot import DiscordBot
 
 settings = get_settings()
 
@@ -59,3 +65,19 @@ def send_event_announcement(client: discord.Client, event: MoobloomEvent) -> Non
 
 def create_event_channel(client: discord.Client, event: MoobloomEvent) -> None:
     pass
+
+
+def add_calendar_reaction_handler(bot: DiscordBot) -> None:
+    pass
+
+
+def add_event_reaction_handler(bot: DiscordBot, event: MoobloomEvent) -> None:
+    pass
+
+
+def add_reaction_handlers(bot: DiscordBot) -> None:
+    add_calendar_reaction_handler(bot)
+
+    with Session() as session:
+        for event in session.query(MoobloomEvent).all():
+            add_event_reaction_handler(bot, event)
