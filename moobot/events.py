@@ -20,25 +20,28 @@ settings = get_settings()
 _logger = logging.getLogger(__name__)
 
 
-def load_events_from_file(client: discord.Client, path: Path) -> None:
+def read_events_from_file(path: Path) -> list[MoobloomEvent]:
     with path.open("r", encoding="utf-8") as f:
         events = yaml.safe_load(f)["events"]
 
+    # there is a typing bug with parse_obj in the current version of sqlmodel
+    return [MoobloomEvent.parse_obj(event) for event in events]  # type: ignore
+
+
+def load_events_from_file(client: discord.Client, path: Path) -> None:
     with Session() as session:
         existing_event_names = {n[0] for n in session.query(MoobloomEvent.name).all()}
 
-    new_events = []
-    for event in events:
-        if event["name"] in existing_event_names:
+    new_events = 0
+    for event in read_events_from_file(path):
+        if event.name in existing_event_names:
             continue
 
-        _logger.info(f"Found event {event['name']}")
-        new_events.append(MoobloomEvent.parse_obj(event))
-
-    for event in new_events:
+        _logger.info(f"Found event {event.name}")
+        new_events += 1
         create_event(client, event)
 
-    _logger.info(f"Loaded {len(new_events)} events from file")
+    _logger.info(f"Loaded {new_events} events from file")
 
 
 def create_event(client: discord.Client, event: MoobloomEvent) -> None:
