@@ -1,6 +1,5 @@
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional
 
 from sqlmodel import Field, SQLModel
 
@@ -8,7 +7,7 @@ from moobot.db.session import engine
 
 
 class MoobloomEvent(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
+    id: int | None = Field(default=None, primary_key=True)
     name: str
     channel_name: str
     start_date: date | None
