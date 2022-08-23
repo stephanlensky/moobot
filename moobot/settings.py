@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     # event listing config
     calendar_channel_id: int
     event_announce_channel_id: int
+    rsvp_yes_emoji: str = "✅"
+    rsvp_maybe_emoji: str = "❓"
+    rsvp_no_emoji: str = "❌"
+    get_all_event_channels_react_emoji_name: str = "toadping"
+    all_events_role_name: str = "all-events"
+    active_events_category_name: str = "Moobloom Events"
 
     class Config:
         env_file = ".env"

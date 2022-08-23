@@ -10,9 +10,15 @@ from pathlib import Path
 from typing import Any, Callable, Coroutine, Pattern
 
 import discord
-from discord import Member, Message, Reaction, User
+from discord import Member, Message, PartialEmoji, RawReactionActionEvent, User
 
-from moobot.events import add_reaction_handlers, load_events_from_file
+from moobot.events import (
+    add_reaction_handlers,
+    create_event_channels,
+    load_events_from_file,
+    send_event_announcements,
+    update_calendar_message,
+)
 from moobot.settings import get_settings
 
 settings = get_settings()
@@ -30,7 +36,7 @@ class ReactionAction(str, Enum):
     REMOVED = "removed"
 
 
-ReactionHandler = Callable[[ReactionAction, Reaction, User | Member], Coroutine[None, Any, Any]]
+ReactionHandler = Callable[[ReactionAction, PartialEmoji, User | Member], Coroutine[None, Any, Any]]
 
 
 class DiscordBot:
@@ -91,15 +97,21 @@ class DiscordBot:
                 break
 
     async def on_reaction_change(
-        self, action: ReactionAction, reaction: Reaction, user: Member | User
+        self, action: ReactionAction, payload: RawReactionActionEvent
     ) -> None:
-        # if the reaction is on a message in a thread with an active interaction, pass it to the
-        # interaction reaction handler
-        message = reaction.message
-
         # check if there are any registered handlers for reactions on this message
-        if message.id in self.reaction_handlers:
-            await self.reaction_handlers[message.id](action, reaction, user)
+        if payload.message_id in self.reaction_handlers:
+            user: User | Member | None
+            if payload.guild_id is not None:
+                guild = self.client.get_guild(payload.guild_id)
+                if guild is None:
+                    raise ValueError(f"guild {payload.guild_id} not found")
+                user = (await guild.query_members(user_ids=[payload.user_id]))[0]
+            else:
+                user = self.client.get_user(payload.user_id)
+            if user is None:
+                raise ValueError(f"user {payload.user_id} not found")
+            await self.reaction_handlers[payload.message_id](action, payload.emoji, user)
 
     @staticmethod
     def command(r: str) -> Callable[..., Any]:
@@ -135,19 +147,22 @@ async def start() -> None:
     @client.event
     async def on_ready() -> None:
         _logger.info(f"We have logged in as {client.user}")
-        load_events_from_file(client, Path("moobloom_events.yml"))
-        add_reaction_handlers(discord_bot)
+        await load_events_from_file(client, Path("moobloom_events.yml"))
+        await send_event_announcements(client)
+        await create_event_channels(client)
+        await update_calendar_message(client)
+        await add_reaction_handlers(discord_bot)
 
     @client.event
     async def on_message(message: Message) -> None:
         await discord_bot.on_message(message)
 
     @client.event
-    async def on_reaction_add(reaction: Reaction, user: Member | User) -> None:
-        await discord_bot.on_reaction_change(ReactionAction.ADDED, reaction, user)
+    async def on_raw_reaction_add(payload: RawReactionActionEvent) -> None:
+        await discord_bot.on_reaction_change(ReactionAction.ADDED, payload)
 
     @client.event
-    async def on_reaction_removed(reaction: Reaction, user: Member | User) -> None:
-        await discord_bot.on_reaction_change(ReactionAction.REMOVED, reaction, user)
+    async def on_raw_reaction_remove(payload: RawReactionActionEvent) -> None:
+        await discord_bot.on_reaction_change(ReactionAction.REMOVED, payload)
 
     await client.start(settings.discord_token)
