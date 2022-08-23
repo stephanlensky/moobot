@@ -10,9 +10,8 @@ from pathlib import Path
 from typing import Any, Callable, Coroutine, Pattern
 
 import discord
-from discord import Member, Message, Reaction, Thread, User
+from discord import Member, Message, Reaction, User
 
-from moobot.discord.thread_interaction import ThreadInteraction
 from moobot.events import add_reaction_handlers, load_events_from_file
 from moobot.settings import get_settings
 
@@ -44,7 +43,6 @@ class DiscordBot:
         self.client = client
         self.command_prefix = command_prefix
 
-        self.active_threads: dict[int, ThreadInteraction] = {}  # thread ID -> setup handler
         self.reaction_handlers: dict[int, ReactionHandler] = {}  # message ID -> reaction handler
 
     def get_command_from_message(self, message: Message) -> str | None:
@@ -71,18 +69,7 @@ class DiscordBot:
         if message.author == self.client.user:
             return
 
-        # if the message is in a thread with an ongoing interaction, pass it to the interaction
-        # message handler
-        if isinstance(message.channel, Thread) and message.channel.id in self.active_threads:
-            thread_interaction = self.active_threads[message.channel.id]
-            await thread_interaction.on_message(message)
-            if thread_interaction.completed:
-                _logger.debug(f"Completed interaction on thread {message.channel.id}")
-                await thread_interaction.finish()
-                self.active_threads.pop(message.channel.id)
-            return
-
-        # otherwise check if the message is a command and pass it to the appropriate command handler
+        # check if the message is a command and pass it to the appropriate command handler
         command = self.get_command_from_message(message)
         if command is None:
             return
@@ -109,16 +96,8 @@ class DiscordBot:
         # if the reaction is on a message in a thread with an active interaction, pass it to the
         # interaction reaction handler
         message = reaction.message
-        if isinstance(message.channel, Thread) and message.channel.id in self.active_threads:
-            thread_interaction = self.active_threads[message.channel.id]
-            await thread_interaction.on_reaction(reaction)
-            if thread_interaction.completed:
-                _logger.debug(f"Completed interaction on thread {message.channel.id}")
-                await thread_interaction.finish()
-                self.active_threads.pop(message.channel.id)
-            return
 
-        # otherwise check if there are any registered handlers for reactions on this message
+        # check if there are any registered handlers for reactions on this message
         if message.id in self.reaction_handlers:
             await self.reaction_handlers[message.id](action, reaction, user)
 
