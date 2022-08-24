@@ -212,9 +212,10 @@ async def send_event_announcement(client: discord.Client, event: MoobloomEvent) 
         f" not going, react with {settings.rsvp_no_emoji}.*"
     )
 
-    message = await announcement_channel.send(
-        embed=Embed(title=event.name, url=event.url, description=description_content)
-    )
+    embed = Embed(title=event.name, url=event.url, description=description_content)
+    if event.image_url:
+        embed.set_image(url=event.image_url)
+    message = await announcement_channel.send(embed=embed)
     await message.add_reaction(settings.rsvp_yes_emoji)
     await message.add_reaction(settings.rsvp_maybe_emoji)
     await message.add_reaction(settings.rsvp_no_emoji)

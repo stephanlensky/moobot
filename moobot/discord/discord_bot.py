@@ -134,9 +134,9 @@ class DiscordBot:
         await initialize_events(self)
         await message.channel.send(f"{self.affirm()} {message.author.mention}")
 
-    @command(r"e add (.+)")
+    @command(r"e add (`(.+)`|(.+))")
     async def add_event(self, message: Message, command: re.Match) -> None:
-        raw_event = command.group(1)
+        raw_event = command.group(2) or command.group(3)
         parsed_event = MoobloomEvent.parse_raw(raw_event)
         with Session(expire_on_commit=False) as session:
             session.add(parsed_event)
