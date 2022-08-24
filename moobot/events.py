@@ -204,7 +204,7 @@ async def send_event_announcement(client: discord.Client, event: MoobloomEvent) 
     else:
         description_content = f"**{event_duration}**"
     if event.description:
-        description_content = f"{description_content}\n{event.description}"
+        description_content = f"{description_content}\n{event.description}\n"
 
     description_content = (
         f"{description_content}\n*To RSVP and gain access to the event channel, react with"
