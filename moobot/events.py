@@ -215,6 +215,8 @@ async def send_event_announcement(client: discord.Client, event: MoobloomEvent) 
     embed = Embed(title=event.name, url=event.url, description=description_content)
     if event.image_url:
         embed.set_image(url=event.image_url)
+    if event.thumbnail_url:
+        embed.set_thumbnail(url=event.image_url)
     message = await announcement_channel.send(embed=embed)
     await message.add_reaction(settings.rsvp_yes_emoji)
     await message.add_reaction(settings.rsvp_maybe_emoji)

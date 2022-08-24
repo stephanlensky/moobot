@@ -25,6 +25,7 @@ class MoobloomEvent(SQLModel, table=True):
     description: str | None
     url: str | None
     image_url: str | None
+    thumbnail_url: str | None
 
     announcement_message_id: str | None
     channel_id: str | None
