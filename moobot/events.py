@@ -23,15 +23,22 @@ from discord.utils import get
 from moobot.db.models import MoobloomEvent, MoobloomEventAttendanceType, MoobloomEventRSVP
 from moobot.db.session import Session
 from moobot.settings import get_settings
-from moobot.util.formatting import format_event_duration
+from moobot.util.format import format_event_duration, format_single_event_for_calendar
 
 if TYPE_CHECKING:
-
     from moobot.discord.discord_bot import DiscordBot, ReactionAction
 
 settings = get_settings()
 
 _logger = logging.getLogger(__name__)
+
+
+async def initialize_events(bot: DiscordBot) -> None:
+    await load_events_from_file(bot.client, Path("moobloom_events.yml"))
+    await send_event_announcements(bot.client)
+    await create_event_channels(bot.client)
+    await update_calendar_message(bot.client)
+    await add_reaction_handlers(bot)
 
 
 def read_events_from_file(path: Path) -> list[MoobloomEvent]:
@@ -129,7 +136,7 @@ async def update_calendar_message(client: discord.Client) -> None:
     with Session() as session:
         events: list[MoobloomEvent] = (
             session.query(MoobloomEvent)
-            .filter(MoobloomEvent.end_date > date.today())
+            .filter(MoobloomEvent.end_date >= date.today())
             .order_by(MoobloomEvent.start_date)
             .all()
         )
@@ -144,10 +151,10 @@ async def update_calendar_message(client: discord.Client) -> None:
     formatted_events_by_month_and_year: dict[tuple[int, int], str] = {}
     for (month, year), events in events_by_month_and_year.items():
         formatted_events_by_month_and_year[(month, year)] = "\n".join(
-            [f"{calendar.month_name[month]} {e.start_date.day}: {e.name}" for e in events]
+            [format_single_event_for_calendar(e) for e in events]
         )
 
-    months_sections = "\n".join(
+    months_sections = "\n\n".join(
         [
             f"**{calendar.month_name[month]} {year}:**\n{events}"
             for (month, year), events in formatted_events_by_month_and_year.items()

@@ -32,17 +32,21 @@ class MoobloomEvent(SQLModel, table=True):
     @root_validator(pre=True)
     @classmethod
     def validate_and_fix_date_fields(cls, values: dict[str, Any]) -> dict[str, Any]:
-        if "start_time" in values and "start_date" in values:
+        if values.get("start_time") and values.get("start_date"):
             raise ValueError("start_date and start_time cannot both be specified")
-        if "end_time" in values and "end_date" in values:
+        if values.get("end_time") and values.get("end_date"):
             raise ValueError("end_date and end_time cannot both be specified")
 
         start_time: Optional[datetime] = values.get("start_time")
         if start_time and isinstance(start_time, datetime):
             values["start_date"] = start_time.date()
+        elif start_time and isinstance(start_time, str):
+            values["start_date"] = datetime.fromisoformat(start_time).date()
         end_time: Optional[datetime] = values.get("end_time")
         if end_time and isinstance(end_time, datetime):
             values["end_date"] = end_time.date()
+        elif end_time and isinstance(end_time, str):
+            values["end_date"] = datetime.fromisoformat(end_time).date()
 
         if "end_date" not in values:
             values["end_date"] = values["start_date"]

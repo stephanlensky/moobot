@@ -43,6 +43,8 @@ SQLAlchemy = {extras = ["mypy"], version = "^1.4.35"}
 boto3-stubs = {extras = ["s3"], version = "^1.23.8"}
 mkdocs-material = "^8.3.6"
 types-PyYAML = "^6.0.10"
+python-dateutil = "^2.8.2"
+types-python-dateutil = "^2.8.19"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

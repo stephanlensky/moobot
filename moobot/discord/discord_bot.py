@@ -6,19 +6,14 @@ import random
 import re
 import traceback
 from enum import Enum
-from pathlib import Path
 from typing import Any, Callable, Coroutine, Pattern
 
 import discord
 from discord import Member, Message, PartialEmoji, RawReactionActionEvent, User
 
-from moobot.events import (
-    add_reaction_handlers,
-    create_event_channels,
-    load_events_from_file,
-    send_event_announcements,
-    update_calendar_message,
-)
+from moobot.db.models import MoobloomEvent
+from moobot.db.session import Session
+from moobot.events import initialize_events
 from moobot.settings import get_settings
 
 settings = get_settings()
@@ -135,13 +130,21 @@ class DiscordBot:
         return random.choice(THANKS)
 
     @command(r"e refresh")
-    async def events_refresh(self, message: Message, _command: re.Match) -> None:
-        await load_events_from_file(self.client, Path("moobloom_events.yml"))
-        await send_event_announcements(self.client)
-        await create_event_channels(self.client)
-        await update_calendar_message(self.client)
-        await add_reaction_handlers(self)
+    async def refresh_events(self, message: Message, _command: re.Match) -> None:
+        await initialize_events(self)
         await message.channel.send(f"{self.affirm()} {message.author.mention}")
+
+    @command(r"e add (.+)")
+    async def add_event(self, message: Message, command: re.Match) -> None:
+        raw_event = command.group(1)
+        parsed_event = MoobloomEvent.parse_raw(raw_event)
+        with Session(expire_on_commit=False) as session:
+            session.add(parsed_event)
+            session.commit()
+        await message.channel.send(
+            f"{self.affirm()} {message.author.mention}, created event {parsed_event.name}"
+        )
+        await initialize_events(self)
 
 
 async def start() -> None:
@@ -156,11 +159,7 @@ async def start() -> None:
     @client.event
     async def on_ready() -> None:
         _logger.info(f"We have logged in as {client.user}")
-        await load_events_from_file(client, Path("moobloom_events.yml"))
-        await send_event_announcements(client)
-        await create_event_channels(client)
-        await update_calendar_message(client)
-        await add_reaction_handlers(discord_bot)
+        await initialize_events(discord_bot)
 
     @client.event
     async def on_message(message: Message) -> None:
