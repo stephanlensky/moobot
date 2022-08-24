@@ -123,7 +123,7 @@ class DiscordBot:
         """
 
         def deco(f: Callable[..., Any]) -> Callable[..., Any]:
-            _discord_bot_commands[re.compile(r, re.IGNORECASE)] = f
+            _discord_bot_commands[re.compile(f"^{r}$", re.IGNORECASE)] = f
             return f
 
         return deco
@@ -133,6 +133,15 @@ class DiscordBot:
 
     def thank(self) -> str:
         return random.choice(THANKS)
+
+    @command(r"e refresh")
+    async def events_refresh(self, message: Message, _command: re.Match) -> None:
+        await load_events_from_file(self.client, Path("moobloom_events.yml"))
+        await send_event_announcements(self.client)
+        await create_event_channels(self.client)
+        await update_calendar_message(self.client)
+        await add_reaction_handlers(self)
+        await message.channel.send(f"{self.affirm()} {message.author.mention}")
 
 
 async def start() -> None:

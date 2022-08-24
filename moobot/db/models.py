@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import Enum
+from typing import Any, Optional
 
+from pydantic import root_validator
 from sqlmodel import Field, SQLModel
 
 from moobot.db.session import engine
@@ -15,9 +17,9 @@ class MoobloomEvent(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str
     channel_name: str
-    start_date: date | None
+    start_date: date
     start_time: datetime | None
-    end_date: date | None
+    end_date: date
     end_time: datetime | None
     location: str | None
     description: str | None
@@ -27,48 +29,25 @@ class MoobloomEvent(SQLModel, table=True):
     announcement_message_id: str | None
     channel_id: str | None
 
-    @property
-    def __start_date(self) -> date:
-        if self.start_time:
-            return self.start_time
-        elif self.start_date:
-            return self.start_date
-        raise ValueError("start time/date not specified")
+    @root_validator(pre=True)
+    @classmethod
+    def validate_and_fix_date_fields(cls, values: dict[str, Any]) -> dict[str, Any]:
+        if "start_time" in values and "start_date" in values:
+            raise ValueError("start_date and start_time cannot both be specified")
+        if "end_time" in values and "end_date" in values:
+            raise ValueError("end_date and end_time cannot both be specified")
 
-    @property
-    def __end_date(self) -> date:
-        if self.end_time:
-            return self.end_time
-        elif self.end_date:
-            return self.end_date
-        raise ValueError("end time/date not specified")
+        start_time: Optional[datetime] = values.get("start_time")
+        if start_time and isinstance(start_time, datetime):
+            values["start_date"] = start_time.date()
+        end_time: Optional[datetime] = values.get("end_time")
+        if end_time and isinstance(end_time, datetime):
+            values["end_date"] = end_time.date()
 
-    @property
-    def start_day(self) -> int:
-        return self.__start_date.day
+        if "end_date" not in values:
+            values["end_date"] = values["start_date"]
 
-    @property
-    def start_month(self) -> int:
-        return self.__start_date.month
-
-    @property
-    def start_year(self) -> int:
-        return self.__start_date.year
-
-    @property
-    def end_day(self) -> int:
-        return self.__end_date.day
-
-    @property
-    def end_month(self) -> int:
-        return self.__end_date.month
-
-    @property
-    def end_year(self) -> int:
-        return self.__end_date.year
-
-    def has_end_date(self) -> bool:
-        return self.end_date is not None or self.end_time is not None
+        return values
 
 
 class MoobloomEventAttendanceType(str, Enum):

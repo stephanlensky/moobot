@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import calendar
 import logging
+from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -126,20 +127,24 @@ async def update_calendar_message(client: discord.Client) -> None:
     announcement_channel = get_announcement_channel(client)
 
     with Session() as session:
-        events: list[MoobloomEvent] = session.query(MoobloomEvent).all()
+        events: list[MoobloomEvent] = (
+            session.query(MoobloomEvent)
+            .filter(MoobloomEvent.end_date > date.today())
+            .order_by(MoobloomEvent.start_date)
+            .all()
+        )
 
     events_by_month_and_year: dict[tuple[int, int], list[MoobloomEvent]] = {}
     for event in events:
-        month_and_year = (event.start_month, event.start_year)
+        month_and_year = (event.start_date.month, event.start_date.year)
         if month_and_year not in events_by_month_and_year:
             events_by_month_and_year[month_and_year] = []
         events_by_month_and_year[month_and_year].append(event)
 
     formatted_events_by_month_and_year: dict[tuple[int, int], str] = {}
     for (month, year), events in events_by_month_and_year.items():
-        events.sort(key=lambda e: e.start_day)
         formatted_events_by_month_and_year[(month, year)] = "\n".join(
-            [f"{calendar.month_name[month]} {e.start_day}: {e.name}" for e in events]
+            [f"{calendar.month_name[month]} {e.start_date.day}: {e.name}" for e in events]
         )
 
     months_sections = "\n".join(

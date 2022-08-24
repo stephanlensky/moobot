@@ -1,4 +1,10 @@
 events:
+  - name: Moonrise 2022
+    channel_name: moonrise-2022
+    start_date: "2022-08-06"
+    end_date: "2022-08-07"
+    url: "https://www.moonrisefestival.com/lineup/"
+    location: "Baltimore, MD"
   - name: Electric Zoo 2022
     channel_name: ezoo-2022
     start_date: "2022-09-01"
