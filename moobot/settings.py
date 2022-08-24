@@ -21,9 +21,9 @@ class Settings(BaseSettings):
     rsvp_yes_emoji: str = "✅"
     rsvp_maybe_emoji: str = "❓"
     rsvp_no_emoji: str = "❌"
-    get_all_event_channels_react_emoji_name: str = "toadping"
-    all_events_role_name: str = "all-events"
-    active_events_category_name: str = "Moobloom Events"
+    get_all_event_channels_react_emoji_name: str
+    all_events_role_name: str
+    active_events_category_name: str
 
     class Config:
         env_file = ".env"
