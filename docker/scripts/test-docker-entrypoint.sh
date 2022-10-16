@@ -15,4 +15,4 @@ poetry run pytest tests
 echo "Running mypy..."
 poetry run mypy moobot tests migrations
 echo "Running pylint..."
-poetry run pylint moobot tests migrations
+poetry run flake8 moobot tests migrations
