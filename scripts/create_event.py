@@ -37,7 +37,7 @@ def time_validator(answer: str) -> datetime:
 
 print("Create a new Moobloom Event")
 event_name: str = prompt("Event name: ")
-channel_name: str = prompt("Channel name: ")
+channel_name: str | None = prompt("Channel name: ", allow_none=True)
 description: str = prompt("Description: ", allow_none=True)
 start_date: date | None = prompt("Start date: ", date_validator)
 start_time: datetime | None = prompt("Start time: ", time_validator, allow_none=True)
@@ -58,7 +58,7 @@ thumbnail_url: str = prompt("Thumbnail URL: ", allow_none=True)
 image_url: str = prompt("Image URL: ", allow_none=True)
 
 
-event_json = {
+event_json: dict[str, Any] = {
     "name": event_name,
     "channel_name": channel_name,
     "start_date": start_date.isoformat() if start_date else None,
@@ -71,5 +71,7 @@ event_json = {
     "image_url": image_url,
     "url": url,
 }
+if channel_name is None:
+    event_json["create_channel"] = False
 event_json = {k: v for k, v in event_json.items() if v is not None}
 print(json.dumps(event_json))

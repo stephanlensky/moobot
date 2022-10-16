@@ -26,6 +26,8 @@ from moobot.settings import get_settings
 from moobot.util.format import format_event_duration, format_single_event_for_calendar
 
 if TYPE_CHECKING:
+    from discord.guild import GuildChannel
+
     from moobot.discord.discord_bot import DiscordBot, ReactionAction
 
 settings = get_settings()
@@ -103,7 +105,10 @@ async def send_event_announcements(client: discord.Client) -> None:
 async def create_event_channels(client: discord.Client) -> None:
     with Session(expire_on_commit=False) as session:
         events: list[MoobloomEvent] = (
-            session.query(MoobloomEvent).filter(MoobloomEvent.channel_id == None).all()
+            session.query(MoobloomEvent)
+            .filter(MoobloomEvent.create_channel == True)
+            .filter(MoobloomEvent.channel_id == None)
+            .all()
         )
 
     for event in events:
@@ -153,6 +158,8 @@ async def update_calendar_message(client: discord.Client) -> None:
             for (month, year), events in formatted_events_by_month_and_year.items()
         ]
     )
+    if not months_sections:
+        months_sections = "No upcoming events!"
 
     intro_section = (
         "Welcome to the Moobloom Event calendar! A full list of upcoming events is available"
@@ -199,11 +206,18 @@ async def send_event_announcement(client: discord.Client, event: MoobloomEvent) 
     if event.description:
         description_content = f"{description_content}\n{event.description}\n"
 
-    description_content = (
-        f"{description_content}\n*To RSVP and gain access to the event channel, react with"
-        f" {settings.rsvp_yes_emoji} (going) or {settings.rsvp_maybe_emoji} (maybe).\nIf you are"
-        f" not going, react with {settings.rsvp_no_emoji}.*"
-    )
+    if event.create_channel:
+        description_content = (
+            f"{description_content}\n*To RSVP and gain access to the event channel, react with"
+            f" {settings.rsvp_yes_emoji} (going) or {settings.rsvp_maybe_emoji} (maybe). If you are"
+            f" not going, react with {settings.rsvp_no_emoji}.*"
+        )
+    else:
+        description_content = (
+            f"{description_content}\n*To RSVP, react with {settings.rsvp_yes_emoji} (going) or"
+            f" {settings.rsvp_maybe_emoji} (maybe). If you are not going, react with"
+            f" {settings.rsvp_no_emoji}. This event does not have a dedicated channel.*"
+        )
 
     embed = Embed(title=event.name, url=event.url, description=description_content)
     if event.image_url:
@@ -311,7 +325,7 @@ def remove_rsvp(rsvp_type: MoobloomEventAttendanceType, user_id: int, event_id: 
 def add_event_reaction_handler(bot: DiscordBot, event: MoobloomEvent) -> None:
     announcement_channel = get_announcement_channel(bot.client)
 
-    async def on_calendar_message_reaction(
+    async def on_event_message_reaction(
         action: ReactionAction, emoji: PartialEmoji, user: Member | User
     ) -> None:
         if not isinstance(user, Member):
@@ -324,14 +338,20 @@ def add_event_reaction_handler(bot: DiscordBot, event: MoobloomEvent) -> None:
             return
 
         rsvp_type = MoobloomEventAttendanceType.from_rsvp_react_emoji(emoji.name)
-        channel = announcement_channel.guild.get_channel(int(event.channel_id))  # type: ignore
-        if channel is None:
-            raise ValueError(f"Channel {event.channel_id} for event {event.name} not found")
+
+        channel: GuildChannel | None = None
+        if event.create_channel and event.channel_id is not None:
+            channel = announcement_channel.guild.get_channel(int(event.channel_id))
+            if channel is None:
+                raise ValueError(f"Channel {event.channel_id} for event {event.name} not found")
+        elif event.create_channel:
+            _logger.warn(f"Channel for event {event.name} not yet created")
+
         if action == action.ADDED:
             _logger.info(f"Updating RSVP to {rsvp_type} to {event.name} for user {user.name}")
             update_rsvp(rsvp_type, user.id, event.id)  # type: ignore
             # give user access to private channel
-            if rsvp_type != MoobloomEventAttendanceType.NO:
+            if channel is not None and rsvp_type != MoobloomEventAttendanceType.NO:
                 _logger.info(f"Adding {user.name} to event channel {channel.name}")
                 await channel.set_permissions(
                     user, overwrite=PermissionOverwrite(read_messages=True)
@@ -351,7 +371,8 @@ def add_event_reaction_handler(bot: DiscordBot, event: MoobloomEvent) -> None:
             # if you change your RSVP from "yes" to "maybe", you don't want to be removed from the channel
             with Session() as session:
                 if (
-                    session.query(MoobloomEventRSVP)
+                    channel is not None
+                    and session.query(MoobloomEventRSVP)
                     .filter(MoobloomEventRSVP.event_id == event.id)
                     .filter(MoobloomEventRSVP.user_id == str(user.id))
                     .filter(MoobloomEventRSVP.attendance_type != MoobloomEventAttendanceType.NO)
@@ -363,7 +384,7 @@ def add_event_reaction_handler(bot: DiscordBot, event: MoobloomEvent) -> None:
 
     if event.announcement_message_id is None:
         raise ValueError(f"Event {event.name} not yet announced!")
-    bot.reaction_handlers[int(event.announcement_message_id)] = on_calendar_message_reaction
+    bot.reaction_handlers[int(event.announcement_message_id)] = on_event_message_reaction
     _logger.info(f"Registered reaction handler for event {event.name}")
 
 

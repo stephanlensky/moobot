@@ -16,7 +16,8 @@ settings = get_settings()
 class MoobloomEvent(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     name: str
-    channel_name: str
+    create_channel: bool = True
+    channel_name: str | None
     start_date: date
     start_time: datetime | None
     end_date: date
@@ -31,7 +32,6 @@ class MoobloomEvent(SQLModel, table=True):
     channel_id: str | None
 
     @root_validator(pre=True)
-    @classmethod
     def validate_and_fix_date_fields(cls, values: dict[str, Any]) -> dict[str, Any]:
         if values.get("start_time") and values.get("start_date"):
             raise ValueError("start_date and start_time cannot both be specified")
@@ -51,6 +51,17 @@ class MoobloomEvent(SQLModel, table=True):
 
         if "end_date" not in values:
             values["end_date"] = values["start_date"]
+
+        return values
+
+    @root_validator(pre=True)
+    def validate_create_channel(cls, values: dict[str, Any]) -> dict[str, Any]:
+        if values.get("channel_name") and values.get("create_channel") == False:
+            raise ValueError("If create_channel is false, channel name should not be provided")
+        if values.get("channel_name"):
+            values["create_channel"] = True
+        elif values.get("create_channel"):
+            raise ValueError("channel_name must be provided")
 
         return values
 
