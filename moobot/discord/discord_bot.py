@@ -5,15 +5,18 @@ import logging
 import random
 import re
 import traceback
+from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Coroutine, Pattern
 
 import discord
+from apscheduler.triggers.interval import IntervalTrigger
 from discord import Member, Message, PartialEmoji, RawReactionActionEvent, User
 
 from moobot.db.models import MoobloomEvent
 from moobot.db.session import Session
 from moobot.events import initialize_events
+from moobot.scheduler import get_async_scheduler
 from moobot.settings import get_settings
 
 settings = get_settings()
@@ -43,8 +46,17 @@ class DiscordBot:
 
         self.client = client
         self.command_prefix = command_prefix
+        self.scheduler = get_async_scheduler()
 
         self.reaction_handlers: dict[int, ReactionHandler] = {}  # message ID -> reaction handler
+
+    async def on_ready(self) -> None:
+        self.scheduler.add_job(
+            initialize_events,
+            args=(self,),
+            trigger=IntervalTrigger(seconds=60 * 5),
+            next_run_time=datetime.now(),
+        )
 
     def get_command_from_message(self, message: Message) -> str | None:
         """
@@ -159,7 +171,7 @@ async def start() -> None:
     @client.event
     async def on_ready() -> None:
         _logger.info(f"We have logged in as {client.user}")
-        await initialize_events(discord_bot)
+        await discord_bot.on_ready()
 
     @client.event
     async def on_message(message: Message) -> None:

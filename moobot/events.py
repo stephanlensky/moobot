@@ -36,6 +36,7 @@ _logger = logging.getLogger(__name__)
 
 
 async def initialize_events(bot: DiscordBot) -> None:
+    _logger.info("Initializing events!")
     await load_events_from_file(bot.client, Path("moobloom_events.yml"))
     await send_event_announcements(bot.client)
     await create_event_channels(bot.client)
