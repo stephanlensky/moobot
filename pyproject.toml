@@ -56,7 +56,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.flake8]
 max-line-length = 100
-ignore = ["B008", "E203"]
+ignore = ["B008", "E203", "E501", "E711", "W503"]
 
 [tool.isort]
 profile = "black"

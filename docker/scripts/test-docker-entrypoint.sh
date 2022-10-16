@@ -14,5 +14,5 @@ poetry run pytest tests
 # run linters
 echo "Running mypy..."
 poetry run mypy moobot tests migrations
-echo "Running pylint..."
+echo "Running flake8..."
 poetry run flake8 moobot tests migrations

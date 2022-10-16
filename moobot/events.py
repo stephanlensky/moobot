@@ -93,12 +93,7 @@ async def load_events_from_file(_client: discord.Client, path: Path) -> None:
 async def send_event_announcements(client: discord.Client) -> None:
     with Session(expire_on_commit=False) as session:
         events: list[MoobloomEvent] = (
-            session.query(MoobloomEvent)
-            .filter(
-                MoobloomEvent.announcement_message_id  # pylint: disable=singleton-comparison
-                == None
-            )
-            .all()
+            session.query(MoobloomEvent).filter(MoobloomEvent.announcement_message_id == None).all()
         )
 
     for event in events:
@@ -108,9 +103,7 @@ async def send_event_announcements(client: discord.Client) -> None:
 async def create_event_channels(client: discord.Client) -> None:
     with Session(expire_on_commit=False) as session:
         events: list[MoobloomEvent] = (
-            session.query(MoobloomEvent)
-            .filter(MoobloomEvent.channel_id == None)  # pylint: disable=singleton-comparison
-            .all()
+            session.query(MoobloomEvent).filter(MoobloomEvent.channel_id == None).all()
         )
 
     for event in events:
