@@ -15,32 +15,42 @@ def format_event_duration(
     if start_time and end_time and start_date == end_date:
         stime = start_time.strftime("%-I:%M %p")
         etime = end_time.strftime("%-I:%M %p")
-        return f"{calendar.month_name[start_time.month]} {start_time.day} {stime}-{etime}"
+        return (
+            f"{start_time.strftime('%a')}."
+            f" {calendar.month_name[start_time.month]} {start_time.day} {stime}-{etime}"
+        )
 
     # event with a start and end time on different days
     if start_time and end_time:
         stime = start_time.strftime("%-I:%M %p")
         etime = end_time.strftime("%-I:%M %p")
         return (
-            f"{calendar.month_name[start_time.month]} {start_time.day} {stime} to"
-            f" {calendar.month_name[end_time.month]} {end_time.day} {etime}"
+            f"{start_time.strftime('%a')}."
+            f" {calendar.month_name[start_time.month]} {start_time.day} {stime} to{end_time.strftime('%a')}."
+            f"  {calendar.month_name[end_time.month]} {end_time.day} {etime}"
         )
 
     # single day event with a start time and no specified end time
     if start_time and not end_time:
         stime = start_time.strftime("%-I:%M %p")
-        return f"{calendar.month_name[start_time.month]} {start_time.day} {stime}"
+        return (
+            f"{start_time.strftime('%a')}."
+            f" {calendar.month_name[start_time.month]} {start_time.day} {stime}"
+        )
 
     # multi-day event
     if start_date != end_date:
         return (
-            f"{calendar.month_name[start_date.month]} {start_date.day} to"
-            f" {calendar.month_name[end_date.month]} {end_date.day}"
+            f"{start_date.strftime('%a')}."
+            f" {calendar.month_name[start_date.month]} {start_date.day} to{end_date.strftime('%a')}."
+            f"  {calendar.month_name[end_date.month]} {end_date.day}"
         )
 
     # single day event with no time specified
     if start_date:
-        return f"{calendar.month_name[start_date.month]} {start_date.day}"
+        return (
+            f"{start_date.strftime('%a')}. {calendar.month_name[start_date.month]} {start_date.day}"
+        )
 
     raise ValueError(f"can't format dates {start_date=} {start_time=} {end_date=} {end_time=}")
 
@@ -68,36 +78,41 @@ def format_event_duration_for_calendar(
 
     # event that has a start and end time on the same day
     if start_time and end_time and start_date == end_date:
-        return f"{calendar.month_name[start_time.month]} {start_time.day}, {tduration}"
+        return (
+            f"{start_time.strftime('%a')}."
+            f" {calendar.month_name[start_time.month]} {start_time.day}, {tduration}"
+        )
 
     # event with a start and end time on different days
     if start_time and end_time:
         return (
-            f"{calendar.month_name[start_time.month]} {start_time.day} {stime} to"
+            f"{start_time.strftime('%a')}."
+            f" {calendar.month_name[start_time.month]} {start_time.day} {stime} to"
+            f" {end_time.strftime('%a')}."
             f" {calendar.month_name[end_time.month]} {end_time.day} {etime}"
         )
 
     # single day event with a start time and no specified end time
     if start_time and not end_time:
         return (
-            f"{calendar.month_name[start_time.month]} {start_time.day},"
+            f"{start_time.strftime('%a')}."
+            f" {calendar.month_name[start_time.month]} {start_time.day},"
             f" {start_time.strftime(f'{stime} %p')}"
         )
-
-    # multi-day event within same month
-    if start_date != end_date and start_date.month == end_date.month:
-        return f"{calendar.month_name[start_date.month]} {start_date.day}-{end_date.day}"
 
     # multi-day event
     if start_date != end_date:
         return (
-            f"{calendar.month_name[start_date.month]} {start_date.day}-"
-            f"{calendar.month_name[end_date.month]} {end_date.day}"
+            f"{start_date.strftime('%a')}."
+            f" {calendar.month_name[start_date.month]} {start_date.day}-{end_date.strftime('%a')}."
+            f" {calendar.month_name[end_date.month]} {end_date.day}"
         )
 
     # single day event with no time specified
     if start_date:
-        return f"{calendar.month_name[start_date.month]} {start_date.day}"
+        return (
+            f"{start_date.strftime('%a')}. {calendar.month_name[start_date.month]} {start_date.day}"
+        )
 
     raise ValueError(f"can't format dates {start_date=} {start_time=} {end_date=} {end_time=}")
 
