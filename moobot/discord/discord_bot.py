@@ -11,10 +11,19 @@ from typing import Any, Callable, Coroutine, Pattern
 
 import discord
 from apscheduler.triggers.interval import IntervalTrigger
-from discord import Member, Message, PartialEmoji, RawReactionActionEvent, User
+from discord import (
+    Interaction,
+    Member,
+    Message,
+    PartialEmoji,
+    RawReactionActionEvent,
+    User,
+    app_commands,
+)
 
 from moobot.db.models import MoobloomEvent
 from moobot.db.session import Session
+from moobot.discord.commands.create_event import CreateEventModal
 from moobot.events import initialize_events
 from moobot.scheduler import get_async_scheduler
 from moobot.settings import get_settings
@@ -45,6 +54,7 @@ class DiscordBot:
     ) -> None:
 
         self.client = client
+        self.tree = app_commands.CommandTree(client)
         self.command_prefix = command_prefix
         self.scheduler = get_async_scheduler()
 
@@ -57,6 +67,9 @@ class DiscordBot:
             trigger=IntervalTrigger(seconds=60 * 5),
             next_run_time=datetime.now(),
         )
+        for guild in self.client.guilds:
+            _logger.info(f"Adding commands to guild {guild.name}")
+            self.tree.copy_global_to(guild=guild)  # type: ignore
 
     def get_command_from_message(self, message: Message) -> str | None:
         """
@@ -147,7 +160,7 @@ class DiscordBot:
         await message.channel.send(f"{self.affirm()} {message.author.mention}")
 
     @command(r"e add (`(.+)`|(.+))")
-    async def add_event(self, message: Message, command: re.Match) -> None:
+    async def add_event_json(self, message: Message, command: re.Match) -> None:
         raw_event = command.group(2) or command.group(3)
         parsed_event = MoobloomEvent.parse_raw(raw_event)
         with Session(expire_on_commit=False) as session:
@@ -157,6 +170,13 @@ class DiscordBot:
             f"{self.affirm()} {message.author.mention}, created event {parsed_event.name}"
         )
         await initialize_events(self)
+
+    @command(r"sync_commands")
+    async def sync_commands(self, message: Message, command: re.Match) -> None:
+        if message.guild is None:
+            raise ValueError("Guild is none")
+        _logger.info("Syncing commands")
+        await self.tree.sync(guild=message.guild)  # type: ignore
 
 
 async def start() -> None:
@@ -184,5 +204,12 @@ async def start() -> None:
     @client.event
     async def on_raw_reaction_remove(payload: RawReactionActionEvent) -> None:
         await discord_bot.on_reaction_change(ReactionAction.REMOVED, payload)
+
+    @discord_bot.tree.command(
+        name="create_event", description="Create a new event on the Moobloom calendar."
+    )
+    async def create_event(interaction: Interaction) -> None:
+        _logger.info("Started create_event command")
+        await interaction.response.send_modal(CreateEventModal(discord_bot))
 
     await client.start(settings.discord_token)
