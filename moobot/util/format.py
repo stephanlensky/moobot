@@ -26,8 +26,9 @@ def format_event_duration(
         etime = end_time.strftime("%-I:%M %p")
         return (
             f"{start_time.strftime('%a')}."
-            f" {calendar.month_name[start_time.month]} {start_time.day} {stime} to{end_time.strftime('%a')}."
-            f"  {calendar.month_name[end_time.month]} {end_time.day} {etime}"
+            f" {calendar.month_name[start_time.month]} {start_time.day} {stime} to"
+            f" {end_time.strftime('%a')}."
+            f" {calendar.month_name[end_time.month]} {end_time.day} {etime}"
         )
 
     # single day event with a start time and no specified end time
@@ -43,7 +44,7 @@ def format_event_duration(
         return (
             f"{start_date.strftime('%a')}."
             f" {calendar.month_name[start_date.month]} {start_date.day} to"
-            f" {end_date.strftime('%a')}.  {calendar.month_name[end_date.month]} {end_date.day}"
+            f" {end_date.strftime('%a')}. {calendar.month_name[end_date.month]} {end_date.day}"
         )
 
     # single day event with no time specified
@@ -130,3 +131,19 @@ def format_single_event_for_calendar(event: MoobloomEvent) -> str:
     ):
         return f"**📢  (Ongoing) {formatted_duration}: {event.name}**"
     return f"{formatted_duration}: {event.name}"
+
+
+def format_event_duration_for_event_modal(event: MoobloomEvent) -> str:
+    if event.start_time:
+        start = event.start_time.strftime("%B %-d %-I:%M %p")
+    else:
+        start = event.start_date.strftime("%B %-d")
+
+    if event.end_time:
+        end = event.end_time.strftime("%B %-d %-I:%M %p")
+    elif event.end_date != event.start_date:
+        end = event.end_date.strftime("%B %-d")
+    else:
+        end = None
+
+    return f"{start} to {end}" if end is not None else start

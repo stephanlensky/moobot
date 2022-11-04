@@ -427,3 +427,13 @@ async def add_reaction_handlers(bot: DiscordBot) -> None:
     with Session() as session:
         for event in session.query(MoobloomEvent).all():
             add_event_reaction_handler(bot, event)
+
+
+async def delete_event_announcement(client: discord.Client, event: MoobloomEvent) -> None:
+    if not event.announcement_message_id:
+        return
+
+    announcement_channel = get_announcement_channel(client)
+
+    message = await announcement_channel.fetch_message(int(event.announcement_message_id))
+    await message.delete()

@@ -23,7 +23,10 @@ from discord import (
 
 from moobot.db.models import MoobloomEvent
 from moobot.db.session import Session
-from moobot.discord.commands.create_event import CreateEventModal
+from moobot.discord.commands.create_event import create_event_cmd
+from moobot.discord.commands.delete_event import delete_event_cmd
+from moobot.discord.commands.update_event import update_event_cmd
+from moobot.discord.event_option import event_autocomplete, get_event_from_option
 from moobot.events import initialize_events
 from moobot.scheduler import get_async_scheduler
 from moobot.settings import get_settings
@@ -210,6 +213,42 @@ async def start() -> None:
     )
     async def create_event(interaction: Interaction) -> None:
         _logger.info("Started create_event command")
-        await interaction.response.send_modal(CreateEventModal(discord_bot))
+        await create_event_cmd(discord_bot, interaction)
+
+    @discord_bot.tree.command(
+        name="update_event", description="Update an existing event on the Moobloom calendar."
+    )
+    @app_commands.describe(event="The event to update")
+    @app_commands.autocomplete(event=event_autocomplete)
+    async def update_event(interaction: Interaction, event: str) -> None:
+        _logger.info("Started update_event command")
+        db_event = get_event_from_option(event)
+        if db_event is None:
+            await interaction.response.send_message(
+                f"Sorry {interaction.user.mention}, I couldn't locate the event you selected."
+                " Please try again.",
+                ephemeral=True,
+            )
+            return
+
+        await update_event_cmd(discord_bot, interaction, db_event)
+
+    @discord_bot.tree.command(
+        name="delete_event", description="Permanently delete an event from the Moobloom calendar."
+    )
+    @app_commands.describe(event="The event to delete")
+    @app_commands.autocomplete(event=event_autocomplete)
+    async def delete_event(interaction: Interaction, event: str) -> None:
+        _logger.info("Started delete_event command")
+        db_event = get_event_from_option(event)
+        if db_event is None:
+            await interaction.response.send_message(
+                f"Sorry {interaction.user.mention}, I couldn't locate the event you selected."
+                " Please try again.",
+                ephemeral=True,
+            )
+            return
+
+        await delete_event_cmd(discord_bot, interaction, db_event)
 
     await client.start(settings.discord_token)
