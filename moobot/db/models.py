@@ -60,8 +60,8 @@ class MoobloomEvent(SQLModel, table=True):
         return values
 
     @validator("channel_name")
-    def remove_pound_symbol_from_channel_name(cls, v: str) -> str:
-        return v.removeprefix("#")
+    def remove_pound_symbol_from_channel_name(cls, v: str | None) -> str | None:
+        return v.removeprefix("#") if v else v
 
 
 class MoobloomEventAttendanceType(str, Enum):
