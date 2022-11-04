@@ -4,8 +4,8 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import root_validator
-from sqlmodel import Field, SQLModel
+from pydantic import root_validator, validator
+from sqlmodel import Field, Relationship, SQLModel
 
 from moobot.db.session import engine
 from moobot.settings import get_settings
@@ -31,23 +31,17 @@ class MoobloomEvent(SQLModel, table=True):
     announcement_message_id: str | None
     channel_id: str | None
 
+    rsvps: list["MoobloomEventRSVP"] = Relationship(back_populates="event")
+
     @root_validator(pre=True)
     def validate_and_fix_date_fields(cls, values: dict[str, Any]) -> dict[str, Any]:
-        if values.get("start_time") and values.get("start_date"):
-            raise ValueError("start_date and start_time cannot both be specified")
-        if values.get("end_time") and values.get("end_date"):
-            raise ValueError("end_date and end_time cannot both be specified")
-
         start_time: Optional[datetime] = values.get("start_time")
         if start_time and isinstance(start_time, datetime):
             values["start_date"] = start_time.date()
-        elif start_time and isinstance(start_time, str):
-            values["start_date"] = datetime.fromisoformat(start_time).date()
+
         end_time: Optional[datetime] = values.get("end_time")
         if end_time and isinstance(end_time, datetime):
             values["end_date"] = end_time.date()
-        elif end_time and isinstance(end_time, str):
-            values["end_date"] = datetime.fromisoformat(end_time).date()
 
         if "end_date" not in values:
             values["end_date"] = values["start_date"]
@@ -64,6 +58,10 @@ class MoobloomEvent(SQLModel, table=True):
             raise ValueError("channel_name must be provided")
 
         return values
+
+    @validator("channel_name")
+    def remove_pound_symbol_from_channel_name(cls, v: str) -> str:
+        return v.removeprefix("#")
 
 
 class MoobloomEventAttendanceType(str, Enum):
@@ -95,8 +93,10 @@ class MoobloomEventAttendanceType(str, Enum):
 class MoobloomEventRSVP(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     user_id: str
-    event_id: int
+    event_id: int = Field(foreign_key="moobloomevent.id")
     attendance_type: MoobloomEventAttendanceType
+
+    event: MoobloomEvent = Relationship(back_populates="rsvps")
 
 
 SQLModel.metadata.create_all(engine)

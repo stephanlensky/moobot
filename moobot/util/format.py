@@ -42,8 +42,8 @@ def format_event_duration(
     if start_date != end_date:
         return (
             f"{start_date.strftime('%a')}."
-            f" {calendar.month_name[start_date.month]} {start_date.day} to{end_date.strftime('%a')}."
-            f"  {calendar.month_name[end_date.month]} {end_date.day}"
+            f" {calendar.month_name[start_date.month]} {start_date.day} to"
+            f" {end_date.strftime('%a')}.  {calendar.month_name[end_date.month]} {end_date.day}"
         )
 
     # single day event with no time specified

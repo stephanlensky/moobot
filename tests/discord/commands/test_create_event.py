@@ -44,6 +44,15 @@ SOME_MULTILINE_DESCRIPTION = "Some\nmultiline\ndescription"
             ),
         ),
         (
+            "Sept 21 7PM",
+            EventTime(
+                start_date=SEPTEMBER_21.date(),
+                start_time=SEPTEMBER_21_7PM,
+                end_date=SEPTEMBER_21.date(),
+                end_time=SEPTEMBER_21_7PM,
+            ),
+        ),
+        (
             "9/21 7PM to 9/21 10PM",
             EventTime(
                 start_date=SEPTEMBER_21.date(),

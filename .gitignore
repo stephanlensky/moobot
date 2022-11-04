@@ -1,5 +1,8 @@
 moobloom_events.yml
 
+# VS Code configuration
+.vscode
+
 # testpad file
 testpad.py
 

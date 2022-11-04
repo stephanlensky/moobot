@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -15,6 +16,9 @@ from moobot.util.date_parser import TimeAwareParserResult, time_aware_parser
 
 if TYPE_CHECKING:
     from moobot.discord.discord_bot import DiscordBot
+
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -126,6 +130,7 @@ class CreateEventModal(Modal, title="Create a new event"):
             return
 
         with Session(expire_on_commit=False) as session:
+            _logger.info(f"Adding event {self.name.value} at time {time}")
             session.add(
                 MoobloomEvent(
                     name=self.name.value,
