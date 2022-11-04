@@ -18,10 +18,16 @@ class MoobloomEvent(SQLModel, table=True):
     name: str
     create_channel: bool = True
     channel_name: str | None
+
+    # event time fields
+    # start_date and end_date must always be set
+    # for single-day events, end_date == start_date
+    # for events with a start time and without a set end time, end_time should be None
     start_date: date
     start_time: datetime | None
     end_date: date
     end_time: datetime | None
+
     location: str | None
     description: str | None
     url: str | None
@@ -30,6 +36,8 @@ class MoobloomEvent(SQLModel, table=True):
 
     announcement_message_id: str | None
     channel_id: str | None
+
+    out_of_sync: bool = False
 
     rsvps: list["MoobloomEventRSVP"] = Relationship(back_populates="event")
 

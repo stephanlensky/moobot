@@ -42,6 +42,7 @@ async def initialize_events(bot: DiscordBot) -> None:
     await create_event_channels(bot.client)
     await update_calendar_message(bot.client)
     await add_reaction_handlers(bot)
+    await update_out_of_sync_event_announcements(bot.client)
 
 
 def read_events_from_file(path: Path) -> list[MoobloomEvent]:
@@ -101,6 +102,82 @@ async def send_event_announcements(client: discord.Client) -> None:
 
     for event in events:
         await send_event_announcement(client, event)
+
+
+def build_event_announcement_embed(event: MoobloomEvent) -> Embed:
+    event_duration = format_event_duration(
+        event.start_date, event.start_time, event.end_date, event.end_time
+    )
+
+    if event.location:
+        description_content = f"**{event_duration} - {event.location}**"
+    else:
+        description_content = f"**{event_duration}**"
+    if event.description:
+        description_content = f"{description_content}\n{event.description}\n"
+
+    if event.create_channel:
+        description_content = (
+            f"{description_content}\n*To RSVP and gain access to the event channel, react with"
+            f" {settings.rsvp_yes_emoji} (going) or {settings.rsvp_maybe_emoji} (maybe). If you are"
+            f" not going, react with {settings.rsvp_no_emoji}.*"
+        )
+    else:
+        description_content = (
+            f"{description_content}\n*To RSVP, react with {settings.rsvp_yes_emoji} (going) or"
+            f" {settings.rsvp_maybe_emoji} (maybe). If you are not going, react with"
+            f" {settings.rsvp_no_emoji}. This event does not have a dedicated channel.*"
+        )
+
+    embed = Embed(title=event.name, url=event.url, description=description_content)
+    if event.image_url:
+        embed.set_image(url=event.image_url)
+    if event.thumbnail_url:
+        embed.set_thumbnail(url=event.image_url)
+
+    return embed
+
+
+async def send_event_announcement(client: discord.Client, event: MoobloomEvent) -> None:
+    _logger.info(f"Announcing event {event.name}")
+
+    announcement_channel = get_announcement_channel(client)
+
+    message = await announcement_channel.send(embed=build_event_announcement_embed(event))
+    await message.add_reaction(settings.rsvp_yes_emoji)
+    await message.add_reaction(settings.rsvp_maybe_emoji)
+    await message.add_reaction(settings.rsvp_no_emoji)
+
+    with Session() as session:
+        session.add(event)
+        event.announcement_message_id = str(message.id)
+        session.commit()
+
+
+async def update_out_of_sync_event_announcements(client: discord.Client) -> None:
+    with Session() as session:
+        events: list[MoobloomEvent] = (
+            session.query(MoobloomEvent).filter(MoobloomEvent.out_of_sync == True).all()
+        )
+
+        for event in events:
+            _logger.info(f"Updating out-of-sync event {event.name}")
+            await update_event_announcement(client, event)
+            event.out_of_sync = False
+
+        session.commit()
+
+
+async def update_event_announcement(client: discord.Client, event: MoobloomEvent) -> None:
+    if event.announcement_message_id is None:
+        raise ValueError(
+            f"Cannot update announcement for unnanounced event {event.name} (id={event.id})"
+        )
+
+    announcement_channel = get_announcement_channel(client)
+    message = await announcement_channel.fetch_message(int(event.announcement_message_id))
+
+    await message.edit(embed=build_event_announcement_embed(event))
 
 
 async def create_event_channels(client: discord.Client) -> None:
@@ -189,51 +266,6 @@ async def update_calendar_message(client: discord.Client) -> None:
         await calendar_message.edit(content=message_content)
     else:
         _logger.info("Calendar message is up to date, doing nothing")
-
-
-async def send_event_announcement(client: discord.Client, event: MoobloomEvent) -> None:
-    _logger.info(f"Announcing event {event.name}")
-
-    announcement_channel = get_announcement_channel(client)
-
-    event_duration = format_event_duration(
-        event.start_date, event.start_time, event.end_date, event.end_time
-    )
-
-    if event.location:
-        description_content = f"**{event_duration} - {event.location}**"
-    else:
-        description_content = f"**{event_duration}**"
-    if event.description:
-        description_content = f"{description_content}\n{event.description}\n"
-
-    if event.create_channel:
-        description_content = (
-            f"{description_content}\n*To RSVP and gain access to the event channel, react with"
-            f" {settings.rsvp_yes_emoji} (going) or {settings.rsvp_maybe_emoji} (maybe). If you are"
-            f" not going, react with {settings.rsvp_no_emoji}.*"
-        )
-    else:
-        description_content = (
-            f"{description_content}\n*To RSVP, react with {settings.rsvp_yes_emoji} (going) or"
-            f" {settings.rsvp_maybe_emoji} (maybe). If you are not going, react with"
-            f" {settings.rsvp_no_emoji}. This event does not have a dedicated channel.*"
-        )
-
-    embed = Embed(title=event.name, url=event.url, description=description_content)
-    if event.image_url:
-        embed.set_image(url=event.image_url)
-    if event.thumbnail_url:
-        embed.set_thumbnail(url=event.image_url)
-    message = await announcement_channel.send(embed=embed)
-    await message.add_reaction(settings.rsvp_yes_emoji)
-    await message.add_reaction(settings.rsvp_maybe_emoji)
-    await message.add_reaction(settings.rsvp_no_emoji)
-
-    with Session() as session:
-        session.add(event)
-        event.announcement_message_id = str(message.id)
-        session.commit()
 
 
 async def create_event_channel(client: discord.Client, event: MoobloomEvent) -> None:
