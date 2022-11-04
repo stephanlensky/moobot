@@ -2,7 +2,7 @@ from datetime import datetime
 
 import pytest
 
-from moobot.discord.commands.create_event import (
+from moobot.discord.views.event_modal import (
     EventDescriptionAndURLs,
     EventTime,
     _parse_event_description,
@@ -40,7 +40,7 @@ SOME_MULTILINE_DESCRIPTION = "Some\nmultiline\ndescription"
                 start_date=SEPTEMBER_21.date(),
                 start_time=SEPTEMBER_21_7PM,
                 end_date=SEPTEMBER_21.date(),
-                end_time=SEPTEMBER_21_7PM,
+                end_time=None,
             ),
         ),
         (
@@ -49,7 +49,7 @@ SOME_MULTILINE_DESCRIPTION = "Some\nmultiline\ndescription"
                 start_date=SEPTEMBER_21.date(),
                 start_time=SEPTEMBER_21_7PM,
                 end_date=SEPTEMBER_21.date(),
-                end_time=SEPTEMBER_21_7PM,
+                end_time=None,
             ),
         ),
         (
@@ -106,7 +106,19 @@ def test__parse_event_time__various_time_strings__parses_correctly(
             ),
         ),
         (
+            f"url:{SOME_URL} {SOME_SHORT_DESCRIPTION}",
+            EventDescriptionAndURLs(
+                description=SOME_SHORT_DESCRIPTION, url=SOME_URL, image_url=None
+            ),
+        ),
+        (
             f"{SOME_URL} {SOME_OTHER_URL} {SOME_SHORT_DESCRIPTION}",
+            EventDescriptionAndURLs(
+                description=SOME_SHORT_DESCRIPTION, url=SOME_URL, image_url=SOME_OTHER_URL
+            ),
+        ),
+        (
+            f"url:{SOME_URL} image_url:{SOME_OTHER_URL} {SOME_SHORT_DESCRIPTION}",
             EventDescriptionAndURLs(
                 description=SOME_SHORT_DESCRIPTION, url=SOME_URL, image_url=SOME_OTHER_URL
             ),
@@ -115,6 +127,12 @@ def test__parse_event_time__various_time_strings__parses_correctly(
             f"{SOME_URL} {SOME_MULTILINE_DESCRIPTION}",
             EventDescriptionAndURLs(
                 description=SOME_MULTILINE_DESCRIPTION, url=SOME_URL, image_url=None
+            ),
+        ),
+        (
+            f"image_url:{SOME_URL} {SOME_MULTILINE_DESCRIPTION}",
+            EventDescriptionAndURLs(
+                description=SOME_MULTILINE_DESCRIPTION, url=None, image_url=SOME_URL
             ),
         ),
         (

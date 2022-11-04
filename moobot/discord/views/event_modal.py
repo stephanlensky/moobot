@@ -63,14 +63,16 @@ def _parse_event_description(raw_description: str | None) -> EventDescriptionAnd
         return EventDescriptionAndURLs(description=None, url=None, image_url=None)
 
     m = re.match(
-        r"((?P<event_url>http(s)?://\S+)\s((?P<image_url>http(s)?://\S+)\s)?)?(?P<description>.+)",
+        r"(((url:)?(?P<event_url>http(s)?://\S+)\s((image_url:)?(?P<image_url>http(s)?://\S+)\s)?)|(image_url:(?P<only_image_url>http(s)?://\S+)\s)?)?(?P<description>.+)",
         raw_description,
         flags=re.S,
     )
     if m is None:
         raise ValueError("Could not parse description")
     return EventDescriptionAndURLs(
-        description=m.group("description"), url=m.group("event_url"), image_url=m.group("image_url")
+        description=m.group("description"),
+        url=m.group("event_url"),
+        image_url=m.group("image_url") or m.group("only_image_url"),
     )
 
 
@@ -115,7 +117,11 @@ class CreateEventModal(Modal):
             self._prefill_fields(prefill)
 
     def _prefill_fields(self, event: MoobloomEvent) -> None:
-        description_parts = (event.url, event.image_url, event.description)
+        description_parts = (
+            f"url:{event.url}" if event.url else None,
+            f"image_url:{event.image_url}" if event.image_url else None,
+            event.description,
+        )
 
         for child in self.children:
             if not isinstance(child, TextInput):
