@@ -48,7 +48,7 @@ def _parse_event_time(raw_time: str) -> EventTime:
         start_date=start.dt.date(),
         start_time=start.dt if start.has_time else None,
         end_date=end.dt.date(),
-        end_time=end.dt if end.has_time else None,
+        end_time=end.dt if end.has_time and end != start else None,
     )
 
 
