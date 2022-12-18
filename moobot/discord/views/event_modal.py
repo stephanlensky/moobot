@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 from dataclasses import dataclass
@@ -41,7 +42,13 @@ def _parse_event_time(raw_time: str) -> EventTime:
         if not end.has_date:
             end.dt = end.dt.replace(year=start.dt.year, month=start.dt.month, day=start.dt.day)
     else:
-        end = start
+        end = dataclasses.replace(start)  # copy object
+    
+    # this event is probably occurring next year
+    if end.dt < datetime.now():
+        _logger.info("User specified date appears to be in the past, automatically adding 1 year")
+        start.dt = start.dt.replace(year=start.dt.year + 1)
+        end.dt = end.dt.replace(year=end.dt.year + 1)
 
     return EventTime(
         start_date=start.dt.date(),
