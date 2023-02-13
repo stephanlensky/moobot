@@ -20,6 +20,8 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger(__name__)
 
+URL_REGEX = r"http(s)?://\S+"
+
 
 @dataclass
 class EventTime:
@@ -43,7 +45,7 @@ def _parse_event_time(raw_time: str) -> EventTime:
             end.dt = end.dt.replace(year=start.dt.year, month=start.dt.month, day=start.dt.day)
     else:
         end = dataclasses.replace(start)  # copy object
-    
+
     # this event is probably occurring next year
     if end.dt < datetime.now():
         _logger.info("User specified date appears to be in the past, automatically adding 1 year")
@@ -69,17 +71,31 @@ def _parse_event_description(raw_description: str | None) -> EventDescriptionAnd
     if raw_description is None:
         return EventDescriptionAndURLs(description=None, url=None, image_url=None)
 
-    m = re.match(
-        r"(((url:)?(?P<event_url>http(s)?://\S+)\s((image_url:)?(?P<image_url>http(s)?://\S+)\s)?)|(image_url:(?P<only_image_url>http(s)?://\S+)\s)?)?(?P<description>.+)",
-        raw_description,
-        flags=re.S,
-    )
-    if m is None:
-        raise ValueError("Could not parse description")
+    url: str | None = None
+    image_url: str | None = None
+    parts = raw_description.split("\n")
+    if re.match(rf"^{URL_REGEX}$", parts[0]):
+        url = parts.pop(0)
+        if re.match(rf"^{URL_REGEX}$", parts[0]):
+            image_url = parts.pop(0)
+    else:
+        for part in parts:
+            if m := re.match(rf"url:(?P<url>{URL_REGEX})", part):
+                url = m.group("url")
+            elif m := re.match(rf"image_url:(?P<url>{URL_REGEX})", part):
+                image_url = m.group("url")
+
+        if url:
+            parts.remove(f"url:{url}")
+        if image_url:
+            parts.remove(f"image_url:{image_url}")
+
+    description = "\n".join(parts)
+
     return EventDescriptionAndURLs(
-        description=m.group("description"),
-        url=m.group("event_url"),
-        image_url=m.group("image_url") or m.group("only_image_url"),
+        description=description or None,
+        url=url,
+        image_url=image_url,
     )
 
 

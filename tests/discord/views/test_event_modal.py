@@ -100,37 +100,45 @@ def test__parse_event_time__various_time_strings__parses_correctly(
     "description_str,expected",
     [
         (
-            f"{SOME_URL} {SOME_SHORT_DESCRIPTION}",
+            "",
+            EventDescriptionAndURLs(description=None, url=None, image_url=None),
+        ),
+        (
+            f"{SOME_URL}\n{SOME_SHORT_DESCRIPTION}",
             EventDescriptionAndURLs(
                 description=SOME_SHORT_DESCRIPTION, url=SOME_URL, image_url=None
             ),
         ),
         (
-            f"url:{SOME_URL} {SOME_SHORT_DESCRIPTION}",
+            f"url:{SOME_URL}\n{SOME_SHORT_DESCRIPTION}",
             EventDescriptionAndURLs(
                 description=SOME_SHORT_DESCRIPTION, url=SOME_URL, image_url=None
             ),
         ),
         (
-            f"{SOME_URL} {SOME_OTHER_URL} {SOME_SHORT_DESCRIPTION}",
+            f"{SOME_URL}\n{SOME_OTHER_URL}\n{SOME_SHORT_DESCRIPTION}",
             EventDescriptionAndURLs(
                 description=SOME_SHORT_DESCRIPTION, url=SOME_URL, image_url=SOME_OTHER_URL
             ),
         ),
         (
-            f"url:{SOME_URL} image_url:{SOME_OTHER_URL} {SOME_SHORT_DESCRIPTION}",
+            f"url:{SOME_URL}\nimage_url:{SOME_OTHER_URL}\n{SOME_SHORT_DESCRIPTION}",
             EventDescriptionAndURLs(
                 description=SOME_SHORT_DESCRIPTION, url=SOME_URL, image_url=SOME_OTHER_URL
             ),
         ),
         (
-            f"{SOME_URL} {SOME_MULTILINE_DESCRIPTION}",
+            f"url:{SOME_URL}\nimage_url:{SOME_OTHER_URL}",
+            EventDescriptionAndURLs(description=None, url=SOME_URL, image_url=SOME_OTHER_URL),
+        ),
+        (
+            f"{SOME_URL}\n{SOME_MULTILINE_DESCRIPTION}",
             EventDescriptionAndURLs(
                 description=SOME_MULTILINE_DESCRIPTION, url=SOME_URL, image_url=None
             ),
         ),
         (
-            f"image_url:{SOME_URL} {SOME_MULTILINE_DESCRIPTION}",
+            f"image_url:{SOME_URL}\n{SOME_MULTILINE_DESCRIPTION}",
             EventDescriptionAndURLs(
                 description=SOME_MULTILINE_DESCRIPTION, url=None, image_url=SOME_URL
             ),
