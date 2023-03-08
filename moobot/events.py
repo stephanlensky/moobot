@@ -3,11 +3,9 @@ from __future__ import annotations
 import calendar
 import logging
 from datetime import date
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import discord
-import yaml
 from discord import (
     Embed,
     Emoji,
@@ -45,14 +43,6 @@ async def initialize_events(bot: DiscordBot) -> None:
     await update_out_of_sync_event_announcements(bot.client)
 
 
-def read_events_from_file(path: Path) -> list[MoobloomEvent]:
-    with path.open("r", encoding="utf-8") as f:
-        events = yaml.safe_load(f)["events"]
-
-    # there is a typing bug with parse_obj in the current version of sqlmodel
-    return [MoobloomEvent.parse_obj(event) for event in events]  # type: ignore
-
-
 def get_calendar_channel(client: discord.Client) -> TextChannel:
     calendar_channel = client.get_channel(settings.calendar_channel_id)
     if calendar_channel is None:
@@ -73,25 +63,6 @@ def get_announcement_channel(client: discord.Client) -> TextChannel:
 
 def get_custom_emoji_by_name(client: discord.Client, emoji: str) -> Emoji:
     return next(e for e in client.emojis if e.name == emoji)
-
-
-async def load_events_from_file(_client: discord.Client, path: Path) -> None:
-    with Session() as session:
-        existing_event_names = {n[0] for n in session.query(MoobloomEvent.name).all()}
-
-    new_events = 0
-    for event in read_events_from_file(path):
-        if event.name in existing_event_names:
-            continue
-
-        with Session() as session:
-            session.add(event)
-            session.commit()
-
-            _logger.info(f"Found event {event.name}")
-        new_events += 1
-
-    _logger.info(f"Loaded {new_events} events from file")
 
 
 async def send_event_announcements(client: discord.Client) -> None:

@@ -19,37 +19,26 @@ moobot = "moobot._entry:run_discord_bot"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.11"
-requests = "^2.27.1"
 "discord.py" = { git = "https://github.com/Rapptz/discord.py.git", rev = "277d35c" }
 python-dateutil = "^2.8.2"
 pydantic = {extras = ["dotenv"], version = "^1.9.0"}
-SQLAlchemy = "^1.4.35"
-wrapt = "^1.14.0"
 psycopg2 = "^2.9.3"
-sqlmodel = "^0.0.6"
-PyYAML = "^6.0"
 APScheduler = "^3.9.1"
+SQLAlchemy = "^2.0.5"
 
 [tool.poetry.dev-dependencies]
-pytest = "^7.1.1"
-pytest-mock = "^3.7.0"
-pytest-asyncio = "^0.18.3"
-black = "^22.3.0"
-isort = "^5.10.1"
-mypy = "^0.961"
-docformatter = "^1.4"
-types-requests = "^2.27.15"
-SQLAlchemy = {extras = ["mypy"], version = "^1.4.35"}
-boto3-stubs = {extras = ["s3"], version = "^1.23.8"}
-mkdocs-material = "^8.3.6"
-types-PyYAML = "^6.0.10"
-python-dateutil = "^2.8.2"
+pytest = "^7.2.1"
+pytest-mock = "^3.10.0"
+black = "^23.1.0"
+isort = "^5.12.0"
+mypy = "^1.0.0"
+docformatter = "^1.5.1"
+flake8 = "^6.0.0"
+flake8-bugbear = "^23.2.13"
+flake8-comprehensions = "^3.10.1"
+Flake8-pyproject = "^1.2.2"
+pytest-cov = "^4.0.0"
 types-python-dateutil = "^2.8.19"
-flake8 = "^5.0.4"
-flake8-bugbear = "^22.9.23"
-flake8-broken-line = "^0.6.0"
-flake8-comprehensions = "^3.10.0"
-Flake8-pyproject = "^1.1.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -70,25 +59,9 @@ line-length = 100
 [tool.mypy]
 show_column_numbers = true
 disallow_untyped_defs = true
-plugins = ["sqlalchemy.ext.mypy.plugin"]
 
 [[tool.mypy.overrides]]
 module = [
-    "craigslist",
-    "geopy.*",
-    "boolean",
     "discord.*",
-    "wrapt",
-    "apscheduler.*",
-    "geopandas.*",
-    "pandas.*",
-    "scipy.*",
 ]
 ignore_missing_imports = true
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-filterwarnings = [
-    # geopandas has not yet switched off of distutils
-    'ignore:distutils Version classes are deprecated:DeprecationWarning'
-]

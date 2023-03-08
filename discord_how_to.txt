@@ -1,0 +1,35 @@
+@MooBot is a custom bot to handle event planning on the server, created by yours truly! He helps us with keeping track of plans within the friend group, and can even automatically create private discussion channels and track RSVPs. Let's hope he doesn't rebel :NotSugoi:
+
+Important channels:
+\* #event-announce - new events are announced here, react to announcements to RSVP
+\* #calendar - the complete list of all upcoming events
+
+**Creating Events**
+To create a new event with Moobot, go to any text channel you have permission to send messages in and type `/create_event`. After sending the message, a dialog window will pop up where you can specify some information about your event.
+
+\* **Name** (required) - the name of the event
+\* **Channel Name** (optional) - if specified, Moobot will create a private text channel with the given name to discuss this event. Attendees can gain access by RSVPing with "Yes" or "Maybe" (or by opting into automatic access to all event channels in #calendar). Use this for events that will require a lot of planning!
+\* **Time** (required) - the time or time range for the event, specifiable in (almost) any format. For an all-day event, just specify a date (ex. `July 7`). For an event with a set start and end time, specify a time range (ex. `July 7 7PM to 10PM`). Or, for a luxurious multi-day vacation, specify a range of dates (ex. `July 1 to July 7`).
+\* **Location** (optional) - the location of the event
+\* **Description** (optional) - the description of the event, as well as the link and image. To add a link or image, you must specify them in this box alongside the description. For example, for an event with a link, image, and description, you would type the following:
+```
+url:https://youreventsite.com
+image_url:https://youreventsite.com/some_image.jpg
+Description of your awesome event!
+```
+All of these sections (URL, image URL, and description) are optional. For example, you could type this to add an event with only a link but no description or image:
+```
+url:https://youreventsite.com
+```
+Or omit the `url:` and `image_url:` sections entirely and just type a description:
+```
+Description of your awesome event!
+```
+
+When you're happy with your event, click "Submit"! This will announce the event in #event-announce and add it to the calendar in #calendar.
+
+**Updating Events**
+To update an existing event, use the `/update_event` command. After typing the command and pressing space, you should be able to select from an autocompleting list of event names. Find the one you would like to update and press enter to bring up the edit dialog.
+
+**Deleting Events**
+To delete an event, use the `/delete_event` command. After typing the command and pressing space, select it from the autocompleting list of event names. Find the one you would like to delete and press enter to execute the command.
