@@ -21,6 +21,7 @@ from discord import (
     app_commands,
 )
 
+from moobot.db.session import Session
 from moobot.discord.commands.create_event import create_event_cmd
 from moobot.discord.commands.delete_event import delete_event_cmd
 from moobot.discord.commands.update_event import update_event_cmd
@@ -215,7 +216,8 @@ async def start() -> None:
     @app_commands.autocomplete(event=event_autocomplete)
     async def update_event(interaction: Interaction, event: str) -> None:
         _logger.info("Started update_event command")
-        db_event = get_event_from_option(event)
+        with Session() as session:
+            db_event = get_event_from_option(session, event)
         if db_event is None:
             await interaction.response.send_message(
                 f"Sorry {interaction.user.mention}, I couldn't locate the event you selected."
@@ -232,16 +234,17 @@ async def start() -> None:
     @app_commands.describe(event="The event to delete")
     @app_commands.autocomplete(event=event_autocomplete)
     async def delete_event(interaction: Interaction, event: str) -> None:
-        _logger.info("Started delete_event command")
-        db_event = get_event_from_option(event)
-        if db_event is None:
-            await interaction.response.send_message(
-                f"Sorry {interaction.user.mention}, I couldn't locate the event you selected."
-                " Please try again.",
-                ephemeral=True,
-            )
-            return
+        with Session() as session:
+            _logger.info("Started delete_event command")
+            db_event = get_event_from_option(session, event)
+            if db_event is None:
+                await interaction.response.send_message(
+                    f"Sorry {interaction.user.mention}, I couldn't locate the event you selected."
+                    " Please try again.",
+                    ephemeral=True,
+                )
+                return
 
-        await delete_event_cmd(discord_bot, interaction, db_event)
+            await delete_event_cmd(session, discord_bot, interaction, db_event)
 
     await client.start(settings.discord_token)

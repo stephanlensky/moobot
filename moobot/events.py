@@ -56,7 +56,7 @@ async def initialize_events(bot: DiscordBot) -> None:
     await create_event_channels(bot.client)
     await update_calendar_message(bot.client)
     await add_reaction_handlers(bot)
-    await update_out_of_sync_event_announcements(bot.client)
+    await update_out_of_sync_events(bot.client)
 
 
 def get_calendar_channel(client: discord.Client) -> TextChannel:
@@ -141,7 +141,7 @@ async def send_event_announcement(client: discord.Client, event: MoobloomEvent) 
         session.commit()
 
 
-async def update_out_of_sync_event_announcements(client: discord.Client) -> None:
+async def update_out_of_sync_events(client: discord.Client) -> None:
     with Session() as session:
         events: list[MoobloomEvent] = (
             session.query(MoobloomEvent).filter(MoobloomEvent.out_of_sync == True).all()
@@ -150,6 +150,7 @@ async def update_out_of_sync_event_announcements(client: discord.Client) -> None
         for event in events:
             _logger.info(f"Updating out-of-sync event {event.name}")
             await update_event_announcement(client, event)
+            await update_event_google_calendar_events(client, event)
             event.out_of_sync = False
 
         session.commit()
@@ -165,6 +166,12 @@ async def update_event_announcement(client: discord.Client, event: MoobloomEvent
     message = await announcement_channel.fetch_message(int(event.announcement_message_id))
 
     await message.edit(embed=build_event_announcement_embed(event))
+
+
+async def update_event_google_calendar_events(client: discord.Client, event: MoobloomEvent) -> None:
+    for rsvp in event.rsvps:
+        user = await client.fetch_user(int(rsvp.user_id))
+        handle_google_calendar_sync_on_rsvp(user, event, MoobloomEventAttendanceType(rsvp.attendance_type))
 
 
 async def create_event_channels(client: discord.Client) -> None:
@@ -523,6 +530,7 @@ def complete_unfinished_google_calendar_setups(bot: DiscordBot) -> None:
             run_coroutine_threadsafe(
                 discord_user.send(GOOGLE_CALENDAR_SYNC_SETUP_COMPLETE_DM), bot.client.loop
             ).result()
+            _logger.info(f"Done Google Calendar sync setup for user {discord_user.name}")
 
 
 async def add_reaction_handlers(bot: DiscordBot) -> None:

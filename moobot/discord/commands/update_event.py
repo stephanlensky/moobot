@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from asyncio import create_task
 from typing import TYPE_CHECKING, Awaitable, Callable
 
 from discord import Interaction
@@ -64,7 +65,7 @@ def get_update_event_callback(
             )
             session.commit()
 
-        await initialize_events(bot)
+        create_task(initialize_events(bot))
 
         await interaction.response.send_message(
             f"{bot.affirm()} {interaction.user.mention}, I updated event {event.name} for you.",

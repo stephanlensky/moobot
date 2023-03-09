@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 import google_auth_oauthlib.flow
@@ -118,7 +119,11 @@ def _build_gcalendar_event(
             "timeZone": settings.tz,
         }
     else:
-        end = {"date": event.end_date.isoformat()}
+        # gcal end dates are exclusive, so for multi day events add 1 day to the (inclusive) stored time
+        if event.start_date != event.end_date:
+            end = {"date": (event.end_date + timedelta(days=1)).isoformat()}
+        else:
+            end = {"date": event.end_date.isoformat()}
 
     gcalendar_event: Event = {
         "id": _build_gcalendar_event_id(event),

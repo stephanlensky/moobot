@@ -1,6 +1,7 @@
 from discord import Interaction
 from discord.app_commands import Choice
 from sqlalchemy import desc
+from sqlalchemy.orm import Session as SessionCls
 
 from moobot.db.models import MoobloomEvent
 from moobot.db.session import Session
@@ -29,16 +30,15 @@ async def event_autocomplete(interaction: Interaction, current: str) -> list[Cho
     ][:25]
 
 
-def get_event_from_option(event_arg: str) -> MoobloomEvent | None:
-    with Session() as session:
-        # if arg is a valid PK ID (if user selected an auto-complete choice)
-        try:
-            event_id = int(event_arg)
-            event = session.query(MoobloomEvent).filter(MoobloomEvent.id == event_id).one_or_none()
-            if event is not None:
-                return event
-        except ValueError:
-            pass
+def get_event_from_option(session: SessionCls, event_arg: str) -> MoobloomEvent | None:
+    # if arg is a valid PK ID (if user selected an auto-complete choice)
+    try:
+        event_id = int(event_arg)
+        event = session.query(MoobloomEvent).filter(MoobloomEvent.id == event_id).one_or_none()
+        if event is not None:
+            return event
+    except ValueError:
+        pass
 
-        # otherwise they manually typed something, try matching by name
-        return session.query(MoobloomEvent).filter(MoobloomEvent.name == event_arg).first()
+    # otherwise they manually typed something, try matching by name
+    return session.query(MoobloomEvent).filter(MoobloomEvent.name == event_arg).first()
