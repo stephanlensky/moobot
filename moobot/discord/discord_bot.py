@@ -26,7 +26,7 @@ from moobot.discord.commands.delete_event import delete_event_cmd
 from moobot.discord.commands.update_event import update_event_cmd
 from moobot.discord.event_option import event_autocomplete, get_event_from_option
 from moobot.events import complete_unfinished_google_calendar_setups, initialize_events
-from moobot.scheduler import get_async_scheduler
+from moobot.scheduler import get_async_scheduler, get_threadpool_scheduler
 from moobot.settings import get_settings
 
 settings = get_settings()
@@ -58,6 +58,7 @@ class DiscordBot:
         self.tree = app_commands.CommandTree(client)
         self.command_prefix = command_prefix
         self.scheduler = get_async_scheduler()
+        self.threadpool_scheduler = get_threadpool_scheduler()
 
         self.reaction_handlers: dict[int, ReactionHandler] = {}  # message ID -> reaction handler
 
@@ -68,7 +69,7 @@ class DiscordBot:
             trigger=IntervalTrigger(seconds=60 * 5),
             next_run_time=datetime.now(),
         )
-        self.scheduler.add_job(
+        self.threadpool_scheduler.add_job(
             complete_unfinished_google_calendar_setups,
             args=(self,),
             trigger=IntervalTrigger(seconds=10),

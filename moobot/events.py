@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import calendar
 import logging
+from asyncio import run_coroutine_threadsafe
 from datetime import date
 from threading import Thread
 from typing import TYPE_CHECKING
@@ -485,7 +486,7 @@ def handle_google_calendar_sync_on_rsvp(
     worker_thread.run()
 
 
-async def complete_unfinished_google_calendar_setups(bot: DiscordBot) -> None:
+def complete_unfinished_google_calendar_setups(bot: DiscordBot) -> None:
     with Session() as session:
         users_with_unfinished_setup = get_api_users_by_setup_finished(session, False)
 
@@ -493,7 +494,11 @@ async def complete_unfinished_google_calendar_setups(bot: DiscordBot) -> None:
             return
 
         for api_user in users_with_unfinished_setup:
-            discord_user = await bot.client.fetch_user(int(api_user.user_id))
+
+            discord_user_future = run_coroutine_threadsafe(
+                bot.client.fetch_user(int(api_user.user_id)), bot.client.loop
+            )
+            discord_user = discord_user_future.result()
             _logger.info(f"Completing Google Calendar sync setup for user {discord_user.name}")
 
             rsvps: list[MoobloomEventRSVP] = (
@@ -508,12 +513,16 @@ async def complete_unfinished_google_calendar_setups(bot: DiscordBot) -> None:
             _logger.info(f"Adding Google Calendar events for {len(rsvps)} existing RSVPs")
             for rsvp in rsvps:
                 event = rsvp.event
-                handle_google_calendar_sync_on_rsvp(discord_user, event, rsvp.attendance_type)
+                handle_google_calendar_sync_on_rsvp(
+                    discord_user, event, MoobloomEventAttendanceType(rsvp.attendance_type)
+                )
 
             api_user.setup_finished = True
             session.commit()
 
-            await discord_user.send(GOOGLE_CALENDAR_SYNC_SETUP_COMPLETE_DM)
+            run_coroutine_threadsafe(
+                discord_user.send(GOOGLE_CALENDAR_SYNC_SETUP_COMPLETE_DM), bot.client.loop
+            ).result()
 
 
 async def add_reaction_handlers(bot: DiscordBot) -> None:
