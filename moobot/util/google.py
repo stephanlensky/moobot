@@ -51,6 +51,7 @@ def get_google_auth_url(user_id: int) -> str:
         # Enable offline access so that you can refresh an access token without
         # re-prompting the user for permission. Recommended for web server apps.
         access_type="offline",
+        approval_prompt="force",
         # Enable incremental authorization. Recommended as a best practice.
         include_granted_scopes="true",
     )
