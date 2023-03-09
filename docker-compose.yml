@@ -46,7 +46,7 @@ services:
     <<: *service
     depends_on:
       - db
-    command: ["/bin/sh", "docker/scripts/migrations-docker-entrypoint.sh"]
+    command: ["/bin/bash", "docker/scripts/migrations-docker-entrypoint.sh"]
 
   pgweb:
     image: sosedoff/pgweb
