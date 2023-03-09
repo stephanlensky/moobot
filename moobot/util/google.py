@@ -112,6 +112,11 @@ def _build_gcalendar_event(
     end: EventDateTime
     if event.end_time:
         end = {"dateTime": event.end_time.isoformat(), "timeZone": settings.tz}
+    elif event.start_time:  # no end time defined, assume end of day
+        end = {
+            "dateTime": event.start_time.replace(hour=23, minute=59).isoformat(),
+            "timeZone": settings.tz,
+        }
     else:
         end = {"date": event.end_date.isoformat()}
 
