@@ -3,6 +3,7 @@ from __future__ import annotations
 import calendar
 import logging
 from datetime import date
+from threading import Thread
 from typing import TYPE_CHECKING
 
 import discord
@@ -18,10 +19,24 @@ from discord import (
 )
 from discord.utils import get
 
+from moobot.constants import (
+    GOOGLE_CALENDAR_SYNC_DISABLE_DM,
+    GOOGLE_CALENDAR_SYNC_ENABLE_DM_TEMPLATE,
+    GOOGLE_CALENDAR_SYNC_ENABLE_USER_EXISTS_DM,
+    GOOGLE_CALENDAR_SYNC_SETUP_COMPLETE_DM,
+)
+from moobot.db.crud.google import get_api_user_by_user_id, get_api_users_by_setup_finished
 from moobot.db.models import MoobloomEvent, MoobloomEventAttendanceType, MoobloomEventRSVP
 from moobot.db.session import Session
 from moobot.settings import get_settings
 from moobot.util.format import format_event_duration, format_single_event_for_calendar
+from moobot.util.google import (
+    add_or_update_event,
+    create_moobloom_events_calendar,
+    get_calendar_service,
+    get_google_auth_url,
+    get_moobloom_events_calendar_id,
+)
 
 if TYPE_CHECKING:
     from discord.guild import GuildChannel
@@ -218,25 +233,44 @@ async def update_calendar_message(client: discord.Client) -> None:
     all_events_react_emoji = get_custom_emoji_by_name(
         client, settings.get_all_event_channels_react_emoji_name
     )
-    react_section = (
+    all_events_react_section = (
         "To automatically gain access to all new event channels (and accept the consequences of"
         f" recieving a ton of notifications), react with {all_events_react_emoji}."
     )
 
+    google_calendar_sync_react_emoji = get_custom_emoji_by_name(
+        client, settings.google_calendar_sync_react_emoji_name
+    )
+    google_calendar_sync_react_section = (
+        "To enable automatic syncing of events to Google Calendar, react with"
+        f" {google_calendar_sync_react_emoji}."
+    )
+
     message_content = (
-        f"{intro_section}\n\n**Moobloom Event Calendar:**\n\n{months_sections}\n\n*{react_section}*"
+        f"{intro_section}\n\n**Moobloom Event"
+        f" Calendar:**\n\n{months_sections}\n\n*{all_events_react_section}*\n\n*{google_calendar_sync_react_section}*"
     )
 
     calendar_message = await get_calendar_message(client, calendar_channel)
     if calendar_message is None:
         _logger.info("Calendar message not found, sending new calendar")
         calendar_message = await calendar_channel.send(content=message_content)
-        await calendar_message.add_reaction(all_events_react_emoji)
+        await calendar_message.add_reaction(google_calendar_sync_react_emoji)
     elif message_content != calendar_message.content:
         _logger.info("Updating calendar message")
         await calendar_message.edit(content=message_content)
     else:
         _logger.info("Calendar message is up to date, doing nothing")
+
+    await add_reaction_if_missing(calendar_message, all_events_react_emoji)
+    await add_reaction_if_missing(calendar_message, google_calendar_sync_react_emoji)
+
+
+async def add_reaction_if_missing(message: Message, emoji: Emoji) -> None:
+    if any(r for r in message.reactions if r.emoji == emoji and r.me):
+        return
+
+    await message.add_reaction(emoji)
 
 
 async def create_event_channel(client: discord.Client, event: MoobloomEvent) -> None:
@@ -268,18 +302,16 @@ async def add_calendar_reaction_handler(bot: DiscordBot) -> None:
     all_events_react_emoji = get_custom_emoji_by_name(
         bot.client, settings.get_all_event_channels_react_emoji_name
     )
+    google_calendar_sync_react_emoji = get_custom_emoji_by_name(
+        bot.client, settings.google_calendar_sync_react_emoji_name
+    )
 
     if calendar_message is None:
         raise ValueError("calendar message not yet sent")
 
-    async def on_calendar_message_reaction(
-        action: ReactionAction, emoji: PartialEmoji, user: Member | User
+    async def handle_all_events_react(
+        action: ReactionAction, emoji: PartialEmoji, user: Member
     ) -> None:
-        if not isinstance(user, Member):
-            raise ValueError("bot must be used on a server")
-        if emoji.id != all_events_react_emoji.id:
-            return
-
         role = get(user.guild.roles, name=settings.all_events_role_name)
         if role is None:
             raise ValueError(f"role {settings.all_events_role_name} not found")
@@ -289,6 +321,38 @@ async def add_calendar_reaction_handler(bot: DiscordBot) -> None:
         elif action == action.REMOVED and role in user.roles:
             _logger.info(f"Removing all events role to user {user.name}")
             await user.remove_roles(role)  # type: ignore
+
+    async def handle_google_calendar_sync_react(
+        action: ReactionAction, emoji: PartialEmoji, user: Member
+    ) -> None:
+        with Session() as session:
+            google_api_user = get_api_user_by_user_id(session, user.id)
+            if action == action.ADDED:
+                _logger.info(f"Reaction for Google Calendar sync added by {user.display_name}")
+                if google_api_user is None:
+                    await user.send(
+                        GOOGLE_CALENDAR_SYNC_ENABLE_DM_TEMPLATE.format(
+                            auth_url=get_google_auth_url(user.id)
+                        )
+                    )
+                else:
+                    await user.send(GOOGLE_CALENDAR_SYNC_ENABLE_USER_EXISTS_DM)
+            elif action == action.REMOVED:
+                _logger.info(f"Reaction for Google Calendar sync removed by {user.display_name}")
+                if google_api_user is not None:
+                    session.delete(google_api_user)
+                    session.commit()
+                    await user.send(GOOGLE_CALENDAR_SYNC_DISABLE_DM)
+
+    async def on_calendar_message_reaction(
+        action: ReactionAction, emoji: PartialEmoji, user: Member | User
+    ) -> None:
+        if not isinstance(user, Member):
+            raise ValueError("bot must be used on a server")
+        if emoji == all_events_react_emoji:
+            await handle_all_events_react(action, emoji, user)
+        elif emoji == google_calendar_sync_react_emoji:
+            await handle_google_calendar_sync_react(action, emoji, user)
 
     bot.reaction_handlers[calendar_message.id] = on_calendar_message_reaction
     _logger.info("Registered reaction handler for calendar message")
@@ -360,6 +424,8 @@ def add_event_reaction_handler(bot: DiscordBot, event: MoobloomEvent) -> None:
                 await channel.set_permissions(
                     user, overwrite=PermissionOverwrite(read_messages=True)
                 )
+            # sync to gcalendar if necessary
+            handle_google_calendar_sync_on_rsvp(user, event, rsvp_type)
             # remove reactions from other rsvp types
             message = await announcement_channel.fetch_message(int(event.announcement_message_id))  # type: ignore
             if message is None:
@@ -375,21 +441,79 @@ def add_event_reaction_handler(bot: DiscordBot, event: MoobloomEvent) -> None:
             # if you change your RSVP from "yes" to "maybe", you don't want to be removed from the channel
             with Session() as session:
                 if (
-                    channel is not None
-                    and session.query(MoobloomEventRSVP)
+                    session.query(MoobloomEventRSVP)
                     .filter(MoobloomEventRSVP.event_id == event.id)
                     .filter(MoobloomEventRSVP.user_id == str(user.id))
                     .filter(MoobloomEventRSVP.attendance_type != MoobloomEventAttendanceType.NO)
                     .first()
                     is None
                 ):
-                    _logger.info(f"Removing {user.name} from event channel {channel.name}")
-                    await channel.set_permissions(user, overwrite=None)
+                    if channel is not None:
+                        _logger.info(f"Removing {user.name} from event channel {channel.name}")
+                        await channel.set_permissions(user, overwrite=None)
+                    # removing reaction is equivalent to RSVPing "No" for the purposes of calendar sync
+                    handle_google_calendar_sync_on_rsvp(user, event, MoobloomEventAttendanceType.NO)
 
     if event.announcement_message_id is None:
         raise ValueError(f"Event {event.name} not yet announced!")
     bot.reaction_handlers[int(event.announcement_message_id)] = on_event_message_reaction
     _logger.info(f"Registered reaction handler for event {event.name}")
+
+
+def handle_google_calendar_sync_on_rsvp(
+    user: Member | User, event: MoobloomEvent, rsvp_type: MoobloomEventAttendanceType
+) -> None:
+    with Session() as session:
+        if (google_api_user := get_api_user_by_user_id(session, user.id)) is None:
+            return
+
+    _logger.debug(
+        f"Handling Google calendar sync for user {user.name}'s RSVP {rsvp_type} to {event.name}"
+    )
+
+    def calendar_worker() -> None:
+        if google_api_user is None:
+            return
+        calendar_service = get_calendar_service(google_api_user)
+        if (calendar_id := get_moobloom_events_calendar_id(calendar_service)) is None:
+            _logger.debug(f"Creating new Google Calendar calendar for user {user.name}")
+            calendar_id = create_moobloom_events_calendar(calendar_service)
+
+        add_or_update_event(calendar_service, calendar_id, event, rsvp_type)
+
+    worker_thread = Thread(target=calendar_worker)
+    worker_thread.run()
+
+
+async def complete_unfinished_google_calendar_setups(bot: DiscordBot) -> None:
+    with Session() as session:
+        users_with_unfinished_setup = get_api_users_by_setup_finished(session, False)
+
+        if not users_with_unfinished_setup:
+            return
+
+        for api_user in users_with_unfinished_setup:
+            discord_user = await bot.client.fetch_user(int(api_user.user_id))
+            _logger.info(f"Completing Google Calendar sync setup for user {discord_user.name}")
+
+            rsvps: list[MoobloomEventRSVP] = (
+                session.query(MoobloomEventRSVP)
+                .join(MoobloomEventRSVP.event)
+                .filter(MoobloomEventRSVP.user_id == api_user.user_id)
+                .filter(MoobloomEventRSVP.attendance_type != MoobloomEventAttendanceType.NO)
+                .filter(MoobloomEvent.end_date >= date.today())
+                .order_by(MoobloomEvent.start_date)
+                .all()
+            )
+            _logger.info(f"Adding Google Calendar events for {len(rsvps)} existing RSVPs")
+            for rsvp in rsvps:
+                event = rsvp.event
+                handle_google_calendar_sync_on_rsvp(discord_user, event, rsvp.attendance_type)
+
+            api_user.setup_finished = True
+            session.commit()
+
+            await discord_user.send(GOOGLE_CALENDAR_SYNC_SETUP_COMPLETE_DM)
 
 
 async def add_reaction_handlers(bot: DiscordBot) -> None:

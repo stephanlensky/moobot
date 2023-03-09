@@ -21,13 +21,11 @@ from discord import (
     app_commands,
 )
 
-from moobot.db.models import MoobloomEvent
-from moobot.db.session import Session
 from moobot.discord.commands.create_event import create_event_cmd
 from moobot.discord.commands.delete_event import delete_event_cmd
 from moobot.discord.commands.update_event import update_event_cmd
 from moobot.discord.event_option import event_autocomplete, get_event_from_option
-from moobot.events import initialize_events
+from moobot.events import complete_unfinished_google_calendar_setups, initialize_events
 from moobot.scheduler import get_async_scheduler
 from moobot.settings import get_settings
 
@@ -68,6 +66,12 @@ class DiscordBot:
             initialize_events,
             args=(self,),
             trigger=IntervalTrigger(seconds=60 * 5),
+            next_run_time=datetime.now(),
+        )
+        self.scheduler.add_job(
+            complete_unfinished_google_calendar_setups,
+            args=(self,),
+            trigger=IntervalTrigger(seconds=10),
             next_run_time=datetime.now(),
         )
         for guild in self.client.guilds:
@@ -162,18 +166,6 @@ class DiscordBot:
         await initialize_events(self)
         await message.channel.send(f"{self.affirm()} {message.author.mention}")
 
-    @command(r"e add (`(.+)`|(.+))")
-    async def add_event_json(self, message: Message, command: re.Match) -> None:
-        raw_event = command.group(2) or command.group(3)
-        parsed_event = MoobloomEvent.parse_raw(raw_event)
-        with Session(expire_on_commit=False) as session:
-            session.add(parsed_event)
-            session.commit()
-        await message.channel.send(
-            f"{self.affirm()} {message.author.mention}, created event {parsed_event.name}"
-        )
-        await initialize_events(self)
-
     @command(r"sync_commands")
     async def sync_commands(self, message: Message, command: re.Match) -> None:
         if message.guild is None:
@@ -208,14 +200,14 @@ async def start() -> None:
     async def on_raw_reaction_remove(payload: RawReactionActionEvent) -> None:
         await discord_bot.on_reaction_change(ReactionAction.REMOVED, payload)
 
-    @discord_bot.tree.command(
+    @discord_bot.tree.command(  # type: ignore
         name="create_event", description="Create a new event on the Moobloom calendar."
     )
     async def create_event(interaction: Interaction) -> None:
         _logger.info("Started create_event command")
         await create_event_cmd(discord_bot, interaction)
 
-    @discord_bot.tree.command(
+    @discord_bot.tree.command(  # type: ignore
         name="update_event", description="Update an existing event on the Moobloom calendar."
     )
     @app_commands.describe(event="The event to update")
@@ -233,7 +225,7 @@ async def start() -> None:
 
         await update_event_cmd(discord_bot, interaction, db_event)
 
-    @discord_bot.tree.command(
+    @discord_bot.tree.command(  # type: ignore
         name="delete_event", description="Permanently delete an event from the Moobloom calendar."
     )
     @app_commands.describe(event="The event to delete")

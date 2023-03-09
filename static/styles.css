@@ -1,0 +1,14 @@
+.center {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    height: 80vh;
+}
+body {
+    background-color: #1e2124;
+}
+p {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: larger;
+    color: whitesmoke;
+}

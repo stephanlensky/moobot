@@ -4,7 +4,7 @@ from datetime import date, datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import ForeignKey
+from sqlalchemy import DateTime, ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from moobot.settings import get_settings
@@ -79,6 +79,30 @@ class MoobloomEventRSVP(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[str]
     event_id: Mapped[int] = mapped_column(ForeignKey("moobloomevent.id"))
-    attendance_type: Mapped[MoobloomEventAttendanceType]
+    attendance_type: Mapped[str]
 
     event: Mapped[MoobloomEvent] = relationship(back_populates="rsvps")
+
+
+class GoogleApiAuthSession(Base):
+    __tablename__ = "googleapiauthsession"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    state: Mapped[str] = mapped_column(unique=True)
+    user_id: Mapped[str] = mapped_column()
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+class GoogleApiUser(Base):
+    __tablename__ = "googleapiuser"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(unique=True)
+    token: Mapped[str]
+    refresh_token: Mapped[str]
+    token_uri: Mapped[str]
+    scopes: Mapped[str]
+
+    # Discord bot server must send a DM and create events for existing RSVPs before setup is finished
+    setup_finished: Mapped[bool] = mapped_column(default=False)
