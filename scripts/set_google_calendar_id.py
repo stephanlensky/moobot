@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from moobot.db.models import GoogleApiUser
@@ -11,7 +10,6 @@ from moobot.util.google import get_calendar_service
 if TYPE_CHECKING:
     from googleapiclient._apis.calendar.v3.resources import CalendarResource  # type: ignore
 
-_logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -30,13 +28,13 @@ def main() -> None:
         for user in users:
             if user.calendar_id:
                 continue
-            _logger.info(f"Processing user {user.user_id}")
+            print(f"Processing user {user.user_id}")
             service = get_calendar_service(user)
             calendar_id = get_moobloom_events_calendar_id(service)
             if calendar_id:
                 user.calendar_id = calendar_id
-                _logger.info("Added calendar ID to user row")
+                print("Added calendar ID to user row")
             else:
-                _logger.error("Failed to add calendar ID to user row")
+                print("Failed to add calendar ID to user row")
 
         session.commit()
