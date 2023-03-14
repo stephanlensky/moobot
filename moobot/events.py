@@ -27,7 +27,12 @@ from moobot.constants import (
     GOOGLE_CALENDAR_SYNC_SETUP_COMPLETE_DM,
 )
 from moobot.db.crud.google import get_api_user_by_user_id, get_api_users_by_setup_finished
-from moobot.db.models import MoobloomEvent, MoobloomEventAttendanceType, MoobloomEventRSVP
+from moobot.db.models import (
+    GoogleApiUser,
+    MoobloomEvent,
+    MoobloomEventAttendanceType,
+    MoobloomEventRSVP,
+)
 from moobot.db.session import Session
 from moobot.settings import get_settings
 from moobot.util.format import format_event_duration, format_single_event_for_calendar
@@ -36,7 +41,6 @@ from moobot.util.google import (
     create_moobloom_events_calendar,
     get_calendar_service,
     get_google_auth_url,
-    get_moobloom_events_calendar_id,
 )
 
 if TYPE_CHECKING:
@@ -51,7 +55,6 @@ _logger = logging.getLogger(__name__)
 
 async def initialize_events(bot: DiscordBot) -> None:
     _logger.info("Initializing events!")
-    # await load_events_from_file(bot.client, Path("moobloom_events.yml"))
     await send_event_announcements(bot.client)
     await create_event_channels(bot.client)
     await update_calendar_message(bot.client)
@@ -485,9 +488,14 @@ def handle_google_calendar_sync_on_rsvp(
         if google_api_user is None:
             return
         calendar_service = get_calendar_service(google_api_user)
-        if (calendar_id := get_moobloom_events_calendar_id(calendar_service)) is None:
+        if (calendar_id := google_api_user.calendar_id) is None:
             _logger.debug(f"Creating new Google Calendar calendar for user {user.name}")
             calendar_id = create_moobloom_events_calendar(calendar_service)
+            with Session() as session:
+                session.query(GoogleApiUser).filter(GoogleApiUser.id == google_api_user.id).update(
+                    {GoogleApiUser.calendar_id: calendar_id}
+                )
+                session.commit()
 
         add_or_update_event(calendar_service, calendar_id, event, rsvp_type)
 

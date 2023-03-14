@@ -36,7 +36,7 @@ CLIENT_CONFIG = {
     }
 }
 
-SCOPES = ["https://www.googleapis.com/auth/calendar"]
+SCOPES = ["https://www.googleapis.com/auth/calendar.app.created"]
 
 
 def _get_flow(state: str | None = None) -> google_auth_oauthlib.flow.Flow:
@@ -80,15 +80,6 @@ def get_calendar_service(user: GoogleApiUser) -> CalendarResource:
     service = build("calendar", "v3", credentials=credentials)
 
     return service
-
-
-def get_moobloom_events_calendar_id(service: CalendarResource) -> str | None:
-    calendars = service.calendarList().list().execute()
-    for calendar in calendars["items"]:
-        if calendar["summary"] == settings.google_calendar_sync_calendar_name:
-            return calendar["id"]
-
-    return None
 
 
 def create_moobloom_events_calendar(service: CalendarResource) -> str:
@@ -172,5 +163,12 @@ def add_or_update_event(
     # create new event
     else:
         _logger.debug(f"Creating new Google Calendar event {event.name}")
-        service.events().insert(calendarId=calendar_id, body=gcalendar_event).execute()
-        _logger.debug(f"Done creating new Google Calendar event {event.name}")
+        try:
+            service.events().insert(calendarId=calendar_id, body=gcalendar_event).execute()
+            _logger.debug(f"Done creating new Google Calendar event {event.name}")
+        except HttpError as e:
+            if e.status_code != 404:
+                raise
+            _logger.warning(
+                f"Error creating Google Calendar event {event.name}: Calendar does not exist"
+            )
