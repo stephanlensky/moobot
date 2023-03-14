@@ -108,6 +108,9 @@ class GoogleApiUser(Base):
     refresh_token: Mapped[str]
     token_uri: Mapped[str]
     scopes: Mapped[str]
+    calendar_id: Mapped[Optional[str]]
 
     # Discord bot server must send a DM and create events for existing RSVPs before setup is finished
     setup_finished: Mapped[bool] = mapped_column(default=False)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
