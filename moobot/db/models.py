@@ -45,6 +45,7 @@ class MoobloomEvent(Base):
     out_of_sync: Mapped[bool] = mapped_column(default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
     rsvps: Mapped[list["MoobloomEventRSVP"]] = relationship(back_populates="event")
 
