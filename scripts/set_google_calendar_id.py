@@ -38,3 +38,7 @@ def main() -> None:
                 print("Failed to add calendar ID to user row")
 
         session.commit()
+
+
+if __name__ == "__main__":
+    main()
