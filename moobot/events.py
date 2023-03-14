@@ -171,7 +171,9 @@ async def update_event_announcement(client: discord.Client, event: MoobloomEvent
 async def update_event_google_calendar_events(client: discord.Client, event: MoobloomEvent) -> None:
     for rsvp in event.rsvps:
         user = await client.fetch_user(int(rsvp.user_id))
-        handle_google_calendar_sync_on_rsvp(user, event, MoobloomEventAttendanceType(rsvp.attendance_type))
+        handle_google_calendar_sync_on_rsvp(
+            user, event, MoobloomEventAttendanceType(rsvp.attendance_type)
+        )
 
 
 async def create_event_channels(client: discord.Client) -> None:
@@ -243,7 +245,7 @@ async def update_calendar_message(client: discord.Client) -> None:
     )
     all_events_react_section = (
         "To automatically gain access to all new event channels (and accept the consequences of"
-        f" recieving a ton of notifications), react with {all_events_react_emoji}."
+        f" receiving a ton of notifications), react with {all_events_react_emoji}."
     )
 
     google_calendar_sync_react_emoji = get_custom_emoji_by_name(
