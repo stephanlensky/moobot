@@ -175,12 +175,34 @@ class DiscordBot:
         _logger.info("Syncing commands")
         await self.tree.sync(guild=message.guild)  # type: ignore
 
+    @command(r"whois (?P<user_id>.+)")
+    async def whois(self, message: Message, command: re.Match) -> None:
+        if message.guild is None:
+            raise ValueError("Guild is none")
+        user_id = int(command.group("user_id"))
+        if member := message.guild.get_member(user_id):
+            if member.nick:
+                await message.channel.send(f"{member.nick} ({member.name})")
+            else:
+                await message.channel.send(member.name)
+        elif user := self.client.get_user(user_id):
+            await message.channel.send(f"{user.name} (Not a member of the server)")
+        else:
+            await message.channel.send(
+                f"Sorry {message.author.mention}, I couldn't find a user with ID {user_id}."
+            )
+
 
 async def start() -> None:
     loop = asyncio.get_running_loop()
 
     intents = discord.Intents(
-        messages=True, guild_messages=True, message_content=True, guilds=True, reactions=True
+        messages=True,
+        guild_messages=True,
+        message_content=True,
+        guilds=True,
+        reactions=True,
+        members=True,
     )
     client = discord.Client(intents=intents, loop=loop)
     discord_bot: DiscordBot = DiscordBot(client)
