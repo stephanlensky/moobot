@@ -87,7 +87,10 @@ def get_custom_emoji_by_name(client: discord.Client, emoji: str) -> Emoji:
 async def send_event_announcements(client: discord.Client) -> None:
     with Session(expire_on_commit=False) as session:
         events: list[MoobloomEvent] = (
-            session.query(MoobloomEvent).filter(MoobloomEvent.announcement_message_id == None).all()
+            session.query(MoobloomEvent)
+            .filter(MoobloomEvent.deleted == False)
+            .filter(MoobloomEvent.announcement_message_id == None)
+            .all()
         )
 
     for event in events:
@@ -147,7 +150,10 @@ async def send_event_announcement(client: discord.Client, event: MoobloomEvent) 
 async def update_out_of_sync_events(client: discord.Client) -> None:
     with Session() as session:
         events: list[MoobloomEvent] = (
-            session.query(MoobloomEvent).filter(MoobloomEvent.out_of_sync == True).all()
+            session.query(MoobloomEvent)
+            .filter(MoobloomEvent.deleted == False)
+            .filter(MoobloomEvent.out_of_sync == True)
+            .all()
         )
 
         for event in events:
@@ -183,6 +189,7 @@ async def create_event_channels(client: discord.Client) -> None:
     with Session(expire_on_commit=False) as session:
         events: list[MoobloomEvent] = (
             session.query(MoobloomEvent)
+            .filter(MoobloomEvent.deleted == False)
             .filter(MoobloomEvent.create_channel == True)
             .filter(MoobloomEvent.channel_id == None)
             .all()
@@ -211,6 +218,7 @@ async def update_calendar_message(client: discord.Client) -> None:
     with Session() as session:
         events: list[MoobloomEvent] = (
             session.query(MoobloomEvent)
+            .filter(MoobloomEvent.deleted == False)
             .filter(MoobloomEvent.end_date >= date.today())
             .order_by(MoobloomEvent.start_date)
             .all()
@@ -547,7 +555,7 @@ async def add_reaction_handlers(bot: DiscordBot) -> None:
     await add_calendar_reaction_handler(bot)
 
     with Session() as session:
-        for event in session.query(MoobloomEvent).all():
+        for event in session.query(MoobloomEvent).filter(MoobloomEvent.deleted == False).all():
             add_event_reaction_handler(bot, event)
 
 

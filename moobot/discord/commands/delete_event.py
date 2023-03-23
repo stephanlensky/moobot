@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from discord import Interaction
 from sqlalchemy.orm import Session
 
-from moobot.db.models import MoobloomEvent, MoobloomEventAttendanceType, MoobloomEventRSVP
+from moobot.db.models import MoobloomEvent, MoobloomEventAttendanceType
 from moobot.discord.views.confirm_delete import ConfirmDelete
 from moobot.events import (
     delete_event_announcement,
@@ -39,8 +39,8 @@ async def delete_event_cmd(
         for rsvp in event.rsvps:
             create_task(delete_google_calendar_event(bot, int(rsvp.user_id), event))
 
-        session.query(MoobloomEventRSVP).filter(MoobloomEventRSVP.event_id == event.id).delete()
-        session.delete(event)
+        event.deleted = True
+        event.updated_by = str(interaction.user.id)
         session.commit()
 
         await confirmation_message.delete()

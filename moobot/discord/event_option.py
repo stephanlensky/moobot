@@ -3,6 +3,7 @@ from discord.app_commands import Choice
 from sqlalchemy import desc
 from sqlalchemy.orm import Session as SessionCls
 
+from moobot.db.crud.events import get_event_by_id, get_event_by_name
 from moobot.db.models import MoobloomEvent
 from moobot.db.session import Session
 from moobot.util.format import format_event_duration
@@ -19,7 +20,10 @@ def _format_event_choice_name(event: MoobloomEvent) -> str:
 async def event_autocomplete(interaction: Interaction, current: str) -> list[Choice]:
     with Session() as session:
         events: list[MoobloomEvent] = (
-            session.query(MoobloomEvent).order_by(desc(MoobloomEvent.id)).all()
+            session.query(MoobloomEvent)
+            .filter(MoobloomEvent.deleted == False)
+            .order_by(desc(MoobloomEvent.id))
+            .all()
         )
 
     # discord API limits to 25 choices
@@ -34,11 +38,11 @@ def get_event_from_option(session: SessionCls, event_arg: str) -> MoobloomEvent 
     # if arg is a valid PK ID (if user selected an auto-complete choice)
     try:
         event_id = int(event_arg)
-        event = session.query(MoobloomEvent).filter(MoobloomEvent.id == event_id).one_or_none()
+        event = get_event_by_id(session, event_id)
         if event is not None:
             return event
     except ValueError:
         pass
 
     # otherwise they manually typed something, try matching by name
-    return session.query(MoobloomEvent).filter(MoobloomEvent.name == event_arg).first()
+    return get_event_by_name(session, event_arg)

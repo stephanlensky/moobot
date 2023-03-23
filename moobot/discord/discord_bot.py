@@ -218,15 +218,15 @@ async def start() -> None:
         _logger.info("Started update_event command")
         with Session() as session:
             db_event = get_event_from_option(session, event)
-        if db_event is None:
-            await interaction.response.send_message(
-                f"Sorry {interaction.user.mention}, I couldn't locate the event you selected."
-                " Please try again.",
-                ephemeral=True,
-            )
-            return
+            if db_event is None:
+                await interaction.response.send_message(
+                    f"Sorry {interaction.user.mention}, I couldn't locate the event you selected."
+                    " Please try again.",
+                    ephemeral=True,
+                )
+                return
 
-        await update_event_cmd(discord_bot, interaction, db_event)
+            await update_event_cmd(discord_bot, session, interaction, db_event)
 
     @discord_bot.tree.command(  # type: ignore
         name="delete_event", description="Permanently delete an event from the Moobloom calendar."

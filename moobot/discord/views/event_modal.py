@@ -199,6 +199,7 @@ class CreateEventModal(Modal):
             description=description_and_urls.description,
             url=description_and_urls.url,
             image_url=description_and_urls.image_url,
+            created_by=interaction.user.id,
         )
 
         await self.callback(self.bot, interaction, event)

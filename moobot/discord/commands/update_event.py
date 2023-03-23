@@ -5,9 +5,9 @@ from asyncio import create_task
 from typing import TYPE_CHECKING, Awaitable, Callable
 
 from discord import Interaction
+from sqlalchemy.orm import Session
 
 from moobot.db.models import MoobloomEvent
-from moobot.db.session import Session
 from moobot.discord.views.event_modal import CreateEventModal
 from moobot.events import initialize_events
 
@@ -18,18 +18,21 @@ if TYPE_CHECKING:
 _logger = logging.getLogger(__name__)
 
 
-async def update_event_cmd(bot: DiscordBot, interaction: Interaction, event: MoobloomEvent) -> None:
+async def update_event_cmd(
+    bot: DiscordBot, session: Session, interaction: Interaction, event: MoobloomEvent
+) -> None:
     await interaction.response.send_modal(
         CreateEventModal(
             bot,
             title="Update an event",
-            callback=get_update_event_callback(event),
+            callback=get_update_event_callback(session, event),
             prefill=event,
         )
     )
 
 
 def get_update_event_callback(
+    session: Session,
     original: MoobloomEvent,
 ) -> Callable[[DiscordBot, Interaction, MoobloomEvent], Awaitable[None]]:
     async def update_event_callback(
@@ -44,26 +47,22 @@ def get_update_event_callback(
             )
             return
 
-        event.id = original.id
+        original.name = event.name
+        original.create_channel = event.create_channel
+        original.channel_name = event.channel_name
+        original.start_date = event.start_date
+        original.start_time = event.start_time
+        original.end_date = event.end_date
+        original.end_time = event.end_time
+        original.location = event.location
+        original.description = event.description
+        original.url = event.url
+        original.image_url = event.image_url
+        original.out_of_sync = True
+        original.updated_by = str(interaction.user.id)
 
-        with Session(expire_on_commit=False) as session:
-            session.query(MoobloomEvent).filter(MoobloomEvent.id == original.id).update(
-                {
-                    MoobloomEvent.name: event.name,
-                    MoobloomEvent.create_channel: event.create_channel,
-                    MoobloomEvent.channel_name: event.channel_name,
-                    MoobloomEvent.start_date: event.start_date,
-                    MoobloomEvent.start_time: event.start_time,
-                    MoobloomEvent.end_date: event.end_date,
-                    MoobloomEvent.end_time: event.end_time,
-                    MoobloomEvent.location: event.location,
-                    MoobloomEvent.description: event.description,
-                    MoobloomEvent.url: event.url,
-                    MoobloomEvent.image_url: event.image_url,
-                    MoobloomEvent.out_of_sync: True,
-                }
-            )
-            session.commit()
+        session.add(original)  # unclear why we need to do this
+        session.commit()
 
         create_task(initialize_events(bot))
 

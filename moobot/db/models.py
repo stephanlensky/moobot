@@ -44,6 +44,12 @@ class MoobloomEvent(Base):
 
     out_of_sync: Mapped[bool] = mapped_column(default=False)
 
+    # discord user ID
+    created_by: Mapped[Optional[str]]
+    updated_by: Mapped[Optional[str]]
+
+    deleted: Mapped[bool] = mapped_column(default=False)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
