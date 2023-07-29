@@ -8,6 +8,7 @@ from threading import Thread
 from typing import TYPE_CHECKING
 
 import discord
+import google
 from discord import (
     Embed,
     Emoji,
@@ -505,7 +506,14 @@ def handle_google_calendar_sync_on_rsvp(
                 )
                 session.commit()
 
-        add_or_update_event(calendar_service, calendar_id, event, rsvp_type)
+        try:
+            add_or_update_event(calendar_service, calendar_id, event, rsvp_type)
+        except google.auth.exceptions.RefreshError:
+            _logger.exception(f"Auth error while handling calendar sync for {user.name}. Removing user.")
+            # user probably deauthed us, just remove them
+            with Session() as session:
+                session.delete(google_api_user)
+                session.commit()
 
     worker_thread = Thread(target=calendar_worker)
     worker_thread.run()

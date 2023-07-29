@@ -2,6 +2,7 @@ version: "3.7"
 
 services:
   service: &service
+    container_name: moobot
     env_file:
       - ".env"
     build:
@@ -17,6 +18,12 @@ services:
       - db
     depends_on:
       - db
+    ports:
+      - "3001:3000"
+    networks:
+      - moobot
+      - proxy
+
 
   db:
     image: postgres
@@ -25,6 +32,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     restart: "unless-stopped"
+    networks:
+      - moobot
 
   devbox: &devbox
     <<: *service
@@ -37,16 +46,22 @@ services:
     entrypoint: /bin/bash
     stdin_open: true
     tty: true
+    networks:
+      - moobot
 
   test:
     <<: *devbox
     command: ["/bin/sh", "docker/scripts/test-docker-entrypoint.sh"]
+    networks:
+      - moobot
 
   migrations:
     <<: *service
     depends_on:
       - db
     command: ["/bin/bash", "docker/scripts/migrations-docker-entrypoint.sh"]
+    networks:
+      - moobot
 
   pgweb:
     image: sosedoff/pgweb
@@ -61,6 +76,13 @@ services:
       - db
     depends_on:
       - db
+    networks:
+      - moobot
 
 volumes:
   pgdata:
+
+networks:
+  moobot:
+  proxy:
+    external: true
