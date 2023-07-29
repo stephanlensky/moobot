@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import calendar
 import logging
 from asyncio import run_coroutine_threadsafe
@@ -26,6 +27,7 @@ from moobot.constants import (
     GOOGLE_CALENDAR_SYNC_ENABLE_DM_TEMPLATE,
     GOOGLE_CALENDAR_SYNC_ENABLE_USER_EXISTS_DM,
     GOOGLE_CALENDAR_SYNC_SETUP_COMPLETE_DM,
+    GOOGLE_CALENDAR_SYNC_TOKEN_NOT_AUTHORIZED,
 )
 from moobot.db.crud.google import get_api_user_by_user_id, get_api_users_by_setup_finished
 from moobot.db.models import (
@@ -492,6 +494,7 @@ def handle_google_calendar_sync_on_rsvp(
     _logger.debug(
         f"Handling Google calendar sync for user {user.name}'s RSVP {rsvp_type} to {event.name}"
     )
+    loop = asyncio.get_running_loop()
 
     def calendar_worker() -> None:
         if google_api_user is None:
@@ -509,11 +512,16 @@ def handle_google_calendar_sync_on_rsvp(
         try:
             add_or_update_event(calendar_service, calendar_id, event, rsvp_type)
         except google.auth.exceptions.RefreshError:
-            _logger.exception(f"Auth error while handling calendar sync for {user.name}. Removing user.")
-            # user probably deauthed us, just remove them
+            _logger.exception(
+                f"Auth error while handling calendar sync for {user.name}. Removing user."
+            )
+            # user deauthed us or token expired, remove and notify
             with Session() as session:
                 session.delete(google_api_user)
                 session.commit()
+            loop.create_task(
+                user.send(GOOGLE_CALENDAR_SYNC_TOKEN_NOT_AUTHORIZED.format(name=user.display_name))
+            )
 
     worker_thread = Thread(target=calendar_worker)
     worker_thread.run()
