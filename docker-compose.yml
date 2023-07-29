@@ -19,9 +19,11 @@ services:
     depends_on:
       - db
     ports:
-      - "3000:3000"
+      - "3001:3000"
     networks:
       - moobot
+      - proxy
+
 
   db:
     image: postgres
@@ -49,7 +51,7 @@ services:
 
   test:
     <<: *devbox
-    command: [ "/bin/sh", "docker/scripts/test-docker-entrypoint.sh" ]
+    command: ["/bin/sh", "docker/scripts/test-docker-entrypoint.sh"]
     networks:
       - moobot
 
@@ -57,11 +59,7 @@ services:
     <<: *service
     depends_on:
       - db
-    command:
-      [
-        "/bin/bash",
-        "docker/scripts/migrations-docker-entrypoint.sh"
-      ]
+    command: ["/bin/bash", "docker/scripts/migrations-docker-entrypoint.sh"]
     networks:
       - moobot
 
@@ -84,6 +82,7 @@ services:
 volumes:
   pgdata:
 
-
 networks:
   moobot:
+  proxy:
+    external: true
