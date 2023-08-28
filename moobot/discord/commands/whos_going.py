@@ -34,7 +34,7 @@ async def whos_going_cmd(
     maybe = f"**Maybe:**\n{rsvps[MoobloomEventAttendanceType.MAYBE]}"
     not_going = f"**Not going:**\n{rsvps[MoobloomEventAttendanceType.NO]}"
     response = (
-        f"Sure {interaction.user.mention}, here is the full list of attendees for the provided"
-        f" event:\n\n{going}\n\n{maybe}\n\n{not_going}"
+        f"Sure {interaction.user.mention}, here is the full list of attendees for **{event.name}**:"
+        f"\n\n{going}\n\n{maybe}\n\n{not_going}"
     )
     await interaction.response.send_message(response, ephemeral=True)
