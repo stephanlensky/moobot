@@ -25,6 +25,7 @@ from moobot.db.session import Session
 from moobot.discord.commands.create_event import create_event_cmd
 from moobot.discord.commands.delete_event import delete_event_cmd
 from moobot.discord.commands.update_event import update_event_cmd
+from moobot.discord.commands.whos_going import whos_going_cmd
 from moobot.discord.event_option import event_autocomplete, get_event_from_option
 from moobot.events import complete_unfinished_google_calendar_setups, initialize_events
 from moobot.scheduler import get_async_scheduler, get_threadpool_scheduler
@@ -54,7 +55,6 @@ class DiscordBot:
         client: discord.Client,
         command_prefix: str | None = "$",
     ) -> None:
-
         self.client = client
         self.tree = app_commands.CommandTree(client)
         self.command_prefix = command_prefix
@@ -242,8 +242,10 @@ async def start() -> None:
             db_event = get_event_from_option(session, event)
             if db_event is None:
                 await interaction.response.send_message(
-                    f"Sorry {interaction.user.mention}, I couldn't locate the event you selected."
-                    " Please try again.",
+                    (
+                        f"Sorry {interaction.user.mention}, I couldn't locate the event you"
+                        " selected. Please try again."
+                    ),
                     ephemeral=True,
                 )
                 return
@@ -261,12 +263,35 @@ async def start() -> None:
             db_event = get_event_from_option(session, event)
             if db_event is None:
                 await interaction.response.send_message(
-                    f"Sorry {interaction.user.mention}, I couldn't locate the event you selected."
-                    " Please try again.",
+                    (
+                        f"Sorry {interaction.user.mention}, I couldn't locate the event you"
+                        " selected. Please try again."
+                    ),
                     ephemeral=True,
                 )
                 return
 
             await delete_event_cmd(session, discord_bot, interaction, db_event)
+
+    @discord_bot.tree.command(  # type: ignore
+        name="whos_going", description="Check who is currently RSVP'd to a given event."
+    )
+    @app_commands.describe(event="The event to check RSVPs for")
+    @app_commands.autocomplete(event=event_autocomplete)
+    async def whos_going(interaction: Interaction, event: str) -> None:
+        with Session() as session:
+            _logger.info("Started whos_going command")
+            db_event = get_event_from_option(session, event)
+            if db_event is None:
+                await interaction.response.send_message(
+                    (
+                        f"Sorry {interaction.user.mention}, I couldn't locate the event you"
+                        " selected. Please try again."
+                    ),
+                    ephemeral=True,
+                )
+                return
+
+            await whos_going_cmd(session, discord_bot, interaction, db_event)
 
     await client.start(settings.discord_token)
