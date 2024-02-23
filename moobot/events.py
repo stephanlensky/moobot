@@ -63,6 +63,7 @@ async def initialize_events(bot: DiscordBot) -> None:
     await update_calendar_message(bot.client)
     await add_reaction_handlers(bot)
     await update_out_of_sync_events(bot.client)
+    await add_event_rsvp_emojis(bot.client)
 
 
 def get_calendar_channel(client: discord.Client) -> TextChannel:
@@ -140,15 +141,33 @@ async def send_event_announcement(client: discord.Client, event: MoobloomEvent) 
     announcement_channel = get_announcement_channel(client)
 
     message = await announcement_channel.send(embed=build_event_announcement_embed(event))
-    await message.add_reaction(settings.rsvp_yes_emoji)
-    await message.add_reaction(settings.rsvp_maybe_emoji)
-    await message.add_reaction(settings.rsvp_no_emoji)
 
     with Session() as session:
         session.add(event)
         event.announcement_message_id = str(message.id)
         session.commit()
 
+async def add_event_rsvp_emojis(client: discord.Client) -> None:
+    with Session() as session:
+        events: list[MoobloomEvent] = ( # if we really care about the extra api calls we can add a state filter here
+            session.query(MoobloomEvent)
+            .filter(MoobloomEvent.deleted == False)
+            .all()
+        )
+
+        for event in events:
+            _logger.info(f"Adding RSVP reactions for event {event.name}")
+            await populate_event_emojis(client, event)
+            event.out_of_sync = False
+
+        session.commit()
+
+async def populate_event_emojis(client: discord.Client, event:MoobloomEvent) -> None: # taking name suggestions
+    announcement_channel = get_announcement_channel(client)
+    message = announcement_channel.fetch_message(event.announcement_message_id)
+    await message.add_reaction(settings.rsvp_yes_emoji)
+    await message.add_reaction(settings.rsvp_maybe_emoji)
+    await message.add_reaction(settings.rsvp_no_emoji)
 
 async def update_out_of_sync_events(client: discord.Client) -> None:
     with Session() as session:
@@ -439,7 +458,7 @@ def add_event_reaction_handler(bot: DiscordBot, event: MoobloomEvent) -> None:
         elif event.create_channel:
             _logger.warn(f"Channel for event {event.name} not yet created")
 
-        if action == action.ADDED:
+        if action == action.ADDED and user.id != bot.client.user.id:
             _logger.info(f"Updating RSVP to {rsvp_type} to {event.name} for user {user.name}")
             update_rsvp(rsvp_type, user.id, event.id)  # type: ignore
             # give user access to private channel
