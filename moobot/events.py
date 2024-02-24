@@ -169,9 +169,11 @@ async def populate_event_emojis(
 ) -> None:  # taking name suggestions
     announcement_channel = get_announcement_channel(client)
     message = await announcement_channel.fetch_message(event.announcement_message_id)
-    await message.add_reaction(settings.rsvp_yes_emoji)
-    await message.add_reaction(settings.rsvp_maybe_emoji)
-    await message.add_reaction(settings.rsvp_no_emoji)
+    await asyncio.gather(
+        message.add_reaction(settings.rsvp_yes_emoji),
+        message.add_reaction(settings.rsvp_maybe_emoji),
+        message.add_reaction(settings.rsvp_no_emoji),
+    )
 
 
 async def update_out_of_sync_events(client: discord.Client) -> None:
