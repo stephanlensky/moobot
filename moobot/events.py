@@ -147,12 +147,13 @@ async def send_event_announcement(client: discord.Client, event: MoobloomEvent) 
         event.announcement_message_id = str(message.id)
         session.commit()
 
+
 async def add_event_rsvp_emojis(client: discord.Client) -> None:
     with Session() as session:
-        events: list[MoobloomEvent] = ( # if we really care about the extra api calls we can add a state filter here
-            session.query(MoobloomEvent)
-            .filter(MoobloomEvent.deleted == False)
-            .all()
+        events: list[
+            MoobloomEvent
+        ] = (  # if we really care about the extra api calls we can add a state filter here
+            session.query(MoobloomEvent).filter(MoobloomEvent.deleted == False).all()
         )
 
         for event in events:
@@ -162,12 +163,16 @@ async def add_event_rsvp_emojis(client: discord.Client) -> None:
 
         session.commit()
 
-async def populate_event_emojis(client: discord.Client, event:MoobloomEvent) -> None: # taking name suggestions
+
+async def populate_event_emojis(
+    client: discord.Client, event: MoobloomEvent
+) -> None:  # taking name suggestions
     announcement_channel = get_announcement_channel(client)
-    message = announcement_channel.fetch_message(event.announcement_message_id)
+    message = await announcement_channel.fetch_message(event.announcement_message_id)
     await message.add_reaction(settings.rsvp_yes_emoji)
     await message.add_reaction(settings.rsvp_maybe_emoji)
     await message.add_reaction(settings.rsvp_no_emoji)
+
 
 async def update_out_of_sync_events(client: discord.Client) -> None:
     with Session() as session:
@@ -554,7 +559,6 @@ def complete_unfinished_google_calendar_setups(bot: DiscordBot) -> None:
             return
 
         for api_user in users_with_unfinished_setup:
-
             discord_user_future = run_coroutine_threadsafe(
                 bot.client.fetch_user(int(api_user.user_id)), bot.client.loop
             )

@@ -10,7 +10,6 @@ def format_event_duration(
     end_date: date,
     end_time: datetime | None,
 ) -> str:
-
     # event that has a start and end time on the same day
     if start_time and end_time and start_date == end_date:
         stime = start_time.strftime("%-I:%M %p")

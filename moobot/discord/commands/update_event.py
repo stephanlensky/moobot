@@ -38,7 +38,6 @@ def get_update_event_callback(
     async def update_event_callback(
         bot: DiscordBot, interaction: Interaction, event: MoobloomEvent
     ) -> None:
-
         if original.channel_name and original.channel_name != event.channel_name:
             await interaction.response.send_message(
                 f"Sorry {interaction.user.mention}, updating event channel name is not currently"
