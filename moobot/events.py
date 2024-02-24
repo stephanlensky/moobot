@@ -152,7 +152,7 @@ async def add_rsvp_reactions(client: discord.Client) -> None:
     with Session() as session:
         events: list[
             MoobloomEvent
-        ] = (  # if we really care about the extra api calls we can add a state filter here
+        ] = (
             session.query(MoobloomEvent)
             .filter(MoobloomEvent.deleted == False)
             .filter(MoobloomEvent.reactions_created == False)
@@ -166,7 +166,7 @@ async def add_rsvp_reactions(client: discord.Client) -> None:
 
 async def add_event_rsvp_reaction(
     client: discord.Client, event: MoobloomEvent
-) -> None:  # taking name suggestions
+) -> None:
     announcement_channel = get_announcement_channel(client)
     message = await announcement_channel.fetch_message(event.announcement_message_id)
     await message.add_reaction(settings.rsvp_yes_emoji)
