@@ -156,10 +156,7 @@ async def add_event_rsvp_emojis(client: discord.Client) -> None:
             session.query(MoobloomEvent).filter(MoobloomEvent.deleted == False).all()
         )
 
-        for event in events:
-            _logger.info(f"Adding RSVP reactions for event {event.name}")
-            await populate_event_emojis(client, event)
-            event.out_of_sync = False
+        await asyncio.gather(*[populate_event_emojis(client, event) for event in events])
 
         session.commit()
 
@@ -169,12 +166,11 @@ async def populate_event_emojis(
 ) -> None:  # taking name suggestions
     announcement_channel = get_announcement_channel(client)
     message = await announcement_channel.fetch_message(event.announcement_message_id)
-    await asyncio.gather(
-        message.add_reaction(settings.rsvp_yes_emoji),
-        message.add_reaction(settings.rsvp_maybe_emoji),
-        message.add_reaction(settings.rsvp_no_emoji),
-    )
-
+    if len(message.reactions) == 0:
+        await message.add_reaction(settings.rsvp_yes_emoji)
+        await message.add_reaction(settings.rsvp_maybe_emoji)
+        await message.add_reaction(settings.rsvp_no_emoji)
+        _logger.info(f"Added rsvp emojis to announcement of event {event.name}")
 
 async def update_out_of_sync_events(client: discord.Client) -> None:
     with Session() as session:
