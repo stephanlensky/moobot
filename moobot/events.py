@@ -172,6 +172,7 @@ async def populate_event_emojis(
         await message.add_reaction(settings.rsvp_no_emoji)
         _logger.info(f"Added rsvp emojis to announcement of event {event.name}")
 
+
 async def update_out_of_sync_events(client: discord.Client) -> None:
     with Session() as session:
         events: list[MoobloomEvent] = (
