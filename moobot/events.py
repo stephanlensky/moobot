@@ -63,7 +63,7 @@ async def initialize_events(bot: DiscordBot) -> None:
     await update_calendar_message(bot.client)
     await add_reaction_handlers(bot)
     await update_out_of_sync_events(bot.client)
-    await add_event_rsvp_emojis(bot.client)
+    await add_rsvp_reactions(bot.client)
 
 
 def get_calendar_channel(client: discord.Client) -> TextChannel:
@@ -148,29 +148,32 @@ async def send_event_announcement(client: discord.Client, event: MoobloomEvent) 
         session.commit()
 
 
-async def add_event_rsvp_emojis(client: discord.Client) -> None:
+async def add_rsvp_reactions(client: discord.Client) -> None:
     with Session() as session:
         events: list[
             MoobloomEvent
         ] = (  # if we really care about the extra api calls we can add a state filter here
-            session.query(MoobloomEvent).filter(MoobloomEvent.deleted == False).all()
+            session.query(MoobloomEvent)
+            .filter(MoobloomEvent.deleted == False)
+            .filter(MoobloomEvent.reactions_created == False)
+            .all()
         )
 
-        await asyncio.gather(*[populate_event_emojis(client, event) for event in events])
+        await asyncio.gather(*[add_event_rsvp_reaction(client, event) for event in events])
 
         session.commit()
 
 
-async def populate_event_emojis(
+async def add_event_rsvp_reaction(
     client: discord.Client, event: MoobloomEvent
 ) -> None:  # taking name suggestions
     announcement_channel = get_announcement_channel(client)
     message = await announcement_channel.fetch_message(event.announcement_message_id)
-    if len(message.reactions) == 0:
-        await message.add_reaction(settings.rsvp_yes_emoji)
-        await message.add_reaction(settings.rsvp_maybe_emoji)
-        await message.add_reaction(settings.rsvp_no_emoji)
-        _logger.info(f"Added rsvp emojis to announcement of event {event.name}")
+    await message.add_reaction(settings.rsvp_yes_emoji)
+    await message.add_reaction(settings.rsvp_maybe_emoji)
+    await message.add_reaction(settings.rsvp_no_emoji)
+    event.reactions_created = True
+    _logger.info(f"Added rsvp emojis to announcement of event {event.name}")
 
 
 async def update_out_of_sync_events(client: discord.Client) -> None:
