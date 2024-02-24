@@ -53,6 +53,7 @@ class MoobloomEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
+    reactions_created: Mapped[bool] = mapped_column(default=False)
     rsvps: Mapped[list["MoobloomEventRSVP"]] = relationship(back_populates="event")
 
 

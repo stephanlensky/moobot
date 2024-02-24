@@ -79,6 +79,7 @@ class DiscordBot:
         for guild in self.client.guilds:
             _logger.info(f"Adding commands to guild {guild.name}")
             self.tree.copy_global_to(guild=guild)  # type: ignore
+            await self.tree.sync(guild=guild)  # type: ignore
 
     def get_command_from_message(self, message: Message) -> str | None:
         """
