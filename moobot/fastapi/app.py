@@ -1,12 +1,13 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
-from moobot.fastapi.routers import google_oauth
+from moobot.fastapi.routers import google_oauth, health
 from moobot.settings import get_settings
 
 settings = get_settings()
 
 ROUTERS = [
+    health.router,
     google_oauth.router,
 ]
 
