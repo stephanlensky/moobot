@@ -689,8 +689,8 @@ def get_event_channel_introduction_message_content(event: MoobloomEvent) -> str:
 
 
 async def update_event_channel_introduction(client: discord.Client, event: MoobloomEvent) -> None:
-    # skip events that were created before this feature was introduced
-    if event.channel_introduction_message_id == "0":
+    # skip events without a channel or that were created before this feature was introduced
+    if event.channel_id is None or event.channel_introduction_message_id == "0":
         return
 
     message_content = get_event_channel_introduction_message_content(event)
