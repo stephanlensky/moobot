@@ -41,6 +41,7 @@ class MoobloomEvent(Base):
 
     announcement_message_id: Mapped[Optional[str]]
     channel_id: Mapped[Optional[str]]
+    channel_introduction_message_id: Mapped[Optional[str]]
 
     out_of_sync: Mapped[bool] = mapped_column(default=False)
 

@@ -22,11 +22,9 @@ services:
       - "3001:3000"
     networks:
       - moobot
-      - proxy
-
 
   db:
-    image: postgres
+    image: postgres:14-alpine
     env_file:
       - ".env"
     volumes:
@@ -68,7 +66,7 @@ services:
     env_file:
       - ".env"
     environment:
-      - DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/postgres?sslmode=disable
+      - PGWEB_DATABASE_URL=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/postgres?sslmode=disable
     restart: "unless-stopped"
     ports:
       - "8081:8081"
@@ -84,5 +82,3 @@ volumes:
 
 networks:
   moobot:
-  proxy:
-    external: true

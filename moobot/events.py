@@ -21,6 +21,7 @@ from discord import (
     User,
 )
 from discord.utils import get
+from sqlalchemy.orm import joinedload
 
 from moobot.constants import (
     GOOGLE_CALENDAR_SYNC_DISABLE_DM,
@@ -38,6 +39,7 @@ from moobot.db.models import (
 )
 from moobot.db.session import Session
 from moobot.settings import get_settings
+from moobot.util.discord import channel_mention, mention
 from moobot.util.format import format_event_duration, format_single_event_for_calendar
 from moobot.util.google import (
     add_or_update_event,
@@ -60,6 +62,7 @@ async def initialize_events(bot: DiscordBot) -> None:
     _logger.info("Initializing events!")
     await send_event_announcements(bot.client)
     await create_event_channels(bot.client)
+    await send_event_channel_introductions(bot.client)
     await update_calendar_message(bot.client)
     await add_reaction_handlers(bot)
     await update_out_of_sync_events(bot.client)
@@ -82,6 +85,20 @@ def get_announcement_channel(client: discord.Client) -> TextChannel:
     if not isinstance(announcement_channel, TextChannel):
         raise ValueError(f"Announcement channel has bad type {type(announcement_channel)}")
     return announcement_channel
+
+
+async def get_event_channel(client: discord.Client, event: MoobloomEvent) -> TextChannel:
+    if event.channel_id is None:
+        raise ValueError(f"Event {event.name} ({event.id}) does not have a channel")
+
+    event_channel = client.get_channel(event.channel_id) or await client.fetch_channel(  # type: ignore
+        event.channel_id  # type: ignore
+    )
+    if event_channel is None:
+        raise ValueError("Event channel does not exist")
+    if not isinstance(event_channel, TextChannel):
+        raise ValueError(f"Event channel has bad type {type(event_channel)}")
+    return event_channel
 
 
 def get_custom_emoji_by_name(client: discord.Client, emoji: str) -> Emoji:
@@ -150,9 +167,7 @@ async def send_event_announcement(client: discord.Client, event: MoobloomEvent) 
 
 async def add_rsvp_reactions(client: discord.Client) -> None:
     with Session() as session:
-        events: list[
-            MoobloomEvent
-        ] = (
+        events: list[MoobloomEvent] = (
             session.query(MoobloomEvent)
             .filter(MoobloomEvent.deleted == False)
             .filter(MoobloomEvent.reactions_created == False)
@@ -164,11 +179,9 @@ async def add_rsvp_reactions(client: discord.Client) -> None:
         session.commit()
 
 
-async def add_event_rsvp_reaction(
-    client: discord.Client, event: MoobloomEvent
-) -> None:
+async def add_event_rsvp_reaction(client: discord.Client, event: MoobloomEvent) -> None:
     announcement_channel = get_announcement_channel(client)
-    message = await announcement_channel.fetch_message(event.announcement_message_id)
+    message = await announcement_channel.fetch_message(event.announcement_message_id)  # type: ignore
     await message.add_reaction(settings.rsvp_yes_emoji)
     await message.add_reaction(settings.rsvp_maybe_emoji)
     await message.add_reaction(settings.rsvp_no_emoji)
@@ -189,6 +202,7 @@ async def update_out_of_sync_events(client: discord.Client) -> None:
             _logger.info(f"Updating out-of-sync event {event.name}")
             await update_event_announcement(client, event)
             await update_event_google_calendar_events(client, event)
+            await update_event_channel_introduction(client, event)
             event.out_of_sync = False
 
         session.commit()
@@ -442,13 +456,16 @@ def remove_rsvp(rsvp_type: MoobloomEventAttendanceType, user_id: int, event_id: 
 
 def add_event_reaction_handler(bot: DiscordBot, event: MoobloomEvent) -> None:
     announcement_channel = get_announcement_channel(bot.client)
+    event_id = event.id
 
     async def on_event_message_reaction(
         action: ReactionAction, emoji: PartialEmoji, user: Member | User
     ) -> None:
         if not isinstance(user, Member):
             raise ValueError("bot must be used on a server")
-        if emoji.name not in (
+        if bot.client.user is None:
+            raise ValueError("can't handle message reaction, bot is not logged in!")
+        if user.id == bot.client.user.id or emoji.name not in (
             settings.rsvp_yes_emoji,
             settings.rsvp_maybe_emoji,
             settings.rsvp_no_emoji,
@@ -456,6 +473,24 @@ def add_event_reaction_handler(bot: DiscordBot, event: MoobloomEvent) -> None:
             return
 
         rsvp_type = MoobloomEventAttendanceType.from_rsvp_react_emoji(emoji.name)
+        await handle_rsvp(bot.client, announcement_channel, event_id, action, rsvp_type, user)
+
+    if event.announcement_message_id is None:
+        raise ValueError(f"Event {event.name} not yet announced!")
+    bot.reaction_handlers[int(event.announcement_message_id)] = on_event_message_reaction
+    _logger.info(f"Registered reaction handler for event {event.name}")
+
+
+async def handle_rsvp(
+    client: discord.Client,
+    announcement_channel: TextChannel,
+    event_id: int,
+    action: ReactionAction,
+    rsvp_type: MoobloomEventAttendanceType,
+    user: Member,
+) -> None:
+    with Session() as session:
+        event = session.query(MoobloomEvent).filter(MoobloomEvent.id == event_id).one()
 
         channel: GuildChannel | None = None
         if event.create_channel and event.channel_id is not None:
@@ -465,7 +500,7 @@ def add_event_reaction_handler(bot: DiscordBot, event: MoobloomEvent) -> None:
         elif event.create_channel:
             _logger.warn(f"Channel for event {event.name} not yet created")
 
-        if action == action.ADDED and user.id != bot.client.user.id:
+        if action == action.ADDED:
             _logger.info(f"Updating RSVP to {rsvp_type} to {event.name} for user {user.name}")
             update_rsvp(rsvp_type, user.id, event.id)  # type: ignore
             # give user access to private channel
@@ -489,25 +524,25 @@ def add_event_reaction_handler(bot: DiscordBot, event: MoobloomEvent) -> None:
             remove_rsvp(rsvp_type, user.id, event.id)  # type: ignore
             # avoid a race condition
             # if you change your RSVP from "yes" to "maybe", you don't want to be removed from the channel
-            with Session() as session:
-                if (
-                    session.query(MoobloomEventRSVP)
-                    .filter(MoobloomEventRSVP.event_id == event.id)
-                    .filter(MoobloomEventRSVP.user_id == str(user.id))
-                    .filter(MoobloomEventRSVP.attendance_type != MoobloomEventAttendanceType.NO)
-                    .first()
-                    is None
-                ):
-                    if channel is not None:
-                        _logger.info(f"Removing {user.name} from event channel {channel.name}")
-                        await channel.set_permissions(user, overwrite=None)
-                    # removing reaction is equivalent to RSVPing "No" for the purposes of calendar sync
-                    handle_google_calendar_sync_on_rsvp(user, event, MoobloomEventAttendanceType.NO)
+            if (
+                session.query(MoobloomEventRSVP)
+                .filter(MoobloomEventRSVP.event_id == event.id)
+                .filter(MoobloomEventRSVP.user_id == str(user.id))
+                .filter(MoobloomEventRSVP.attendance_type != MoobloomEventAttendanceType.NO)
+                .first()
+                is None
+            ):
+                if channel is not None:
+                    _logger.info(f"Removing {user.name} from event channel {channel.name}")
+                    await channel.set_permissions(user, overwrite=None)
+                # removing reaction is equivalent to RSVPing "No" for the purposes of calendar sync
+                handle_google_calendar_sync_on_rsvp(user, event, MoobloomEventAttendanceType.NO)
 
-    if event.announcement_message_id is None:
-        raise ValueError(f"Event {event.name} not yet announced!")
-    bot.reaction_handlers[int(event.announcement_message_id)] = on_event_message_reaction
-    _logger.info(f"Registered reaction handler for event {event.name}")
+        # mark out of sync to update list of RSVPs in private event channel intro message
+        if event.channel_id is not None:
+            event.out_of_sync = True
+            session.commit()
+            await update_out_of_sync_events(client)
 
 
 def handle_google_calendar_sync_on_rsvp(
@@ -608,3 +643,78 @@ async def delete_event_announcement(client: discord.Client, event: MoobloomEvent
 
     message = await announcement_channel.fetch_message(int(event.announcement_message_id))
     await message.delete()
+
+
+async def send_event_channel_introductions(client: discord.Client) -> None:
+    with Session(expire_on_commit=False) as session:
+        events: list[MoobloomEvent] = (
+            session.query(MoobloomEvent)
+            .filter(MoobloomEvent.channel_id != None)
+            .filter(MoobloomEvent.channel_introduction_message_id == None)
+            .options(joinedload(MoobloomEvent.rsvps))
+            .all()
+        )
+
+    for event in events:
+        await update_event_channel_introduction(client, event)
+
+
+def get_event_channel_introduction_message_content(event: MoobloomEvent) -> str:
+    if event.channel_id is None:
+        raise ValueError("Event has no event channel!")
+
+    intro = f"Welcome to {channel_mention(event.channel_id)}! This is a private event channel for **{event.name}**."
+    event_details = (
+        "### Event details\n"
+        + f"**Date:** {format_event_duration(event.start_date, event.start_time, event.end_date, event.end_time)}\n"
+        + (f"**Location:** {event.location}\n" if event.location else "")
+        + (f"**Description:** {event.description}\n" if event.description else "")
+    ).strip()
+    yes_rsvps = (
+        r.user_id for r in event.rsvps if r.attendance_type == MoobloomEventAttendanceType.YES
+    )
+    maybe_rsvps = (
+        r.user_id for r in event.rsvps if r.attendance_type == MoobloomEventAttendanceType.MAYBE
+    )
+    rsvps = (
+        "### RSVPs\n"
+        + f"**Going:**\n{','.join(mention(user_id) for user_id in yes_rsvps) or 'None'}\n"
+        + f"**Maybe:**\n{','.join(mention(user_id) for user_id in maybe_rsvps) or 'None'}"
+    )
+    return "\n".join([intro, event_details, rsvps])
+
+
+async def update_event_channel_introduction(client: discord.Client, event: MoobloomEvent) -> None:
+    # skip events that were created before this feature was introduced
+    if event.channel_introduction_message_id == "0":
+        return
+
+    message_content = get_event_channel_introduction_message_content(event)
+    event_channel = await get_event_channel(client, event)
+
+    # if there is not yet an introduction, send a new message to the event channel
+    if event.channel_introduction_message_id is None:
+        message = await event_channel.send(content=message_content)
+
+        with Session() as session:
+            session.add(event)
+            event.channel_introduction_message_id = str(message.id)
+            session.commit()
+
+        return
+
+    # otherwise fetch and update the existing message
+    event_channel_introduction_message = await event_channel.fetch_message(
+        event.channel_introduction_message_id  # type: ignore
+    )
+    if event_channel_introduction_message is None:
+        _logger.info(
+            f"Failed to update event channel introduction message for {event.name} ({event.id}):"
+            + "event channel introduction message not found"
+        )
+        return
+    if message_content == event_channel_introduction_message.content:
+        _logger.info("Event channel introduction message is up to date, doing nothing")
+        return
+    _logger.info("Updating event channel introduction message")
+    await event_channel_introduction_message.edit(content=message_content)
