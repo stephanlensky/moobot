@@ -490,7 +490,12 @@ async def handle_rsvp(
     user: Member,
 ) -> None:
     with Session() as session:
-        event = session.query(MoobloomEvent).filter(MoobloomEvent.id == event_id).one()
+        event = (
+            session.query(MoobloomEvent)
+            .filter(MoobloomEvent.id == event_id)
+            .options(joinedload(MoobloomEvent.rsvps))
+            .one()
+        )
 
         channel: GuildChannel | None = None
         if event.create_channel and event.channel_id is not None:
@@ -538,11 +543,10 @@ async def handle_rsvp(
                 # removing reaction is equivalent to RSVPing "No" for the purposes of calendar sync
                 handle_google_calendar_sync_on_rsvp(user, event, MoobloomEventAttendanceType.NO)
 
-        # mark out of sync to update list of RSVPs in private event channel intro message
-        if event.channel_id is not None:
-            event.out_of_sync = True
-            session.commit()
-            await update_out_of_sync_events(client)
+        # update list of RSVPs in private event channel intro message
+        if event.channel_introduction_message_id is not None:
+            session.refresh(event)  # update rsvps relationship attr
+            await update_event_channel_introduction(client, event)
 
 
 def handle_google_calendar_sync_on_rsvp(
