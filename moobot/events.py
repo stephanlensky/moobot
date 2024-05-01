@@ -699,6 +699,7 @@ async def update_event_channel_introduction(client: discord.Client, event: Moobl
     # if there is not yet an introduction, send a new message to the event channel
     if event.channel_introduction_message_id is None:
         message = await event_channel.send(content=message_content)
+        await message.pin()
 
         with Session() as session:
             session.add(event)
