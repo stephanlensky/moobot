@@ -682,8 +682,8 @@ def get_event_channel_introduction_message_content(event: MoobloomEvent) -> str:
     )
     rsvps = (
         "### RSVPs\n"
-        + f"**Going:**\n{','.join(mention(user_id) for user_id in yes_rsvps) or 'None'}\n"
-        + f"**Maybe:**\n{','.join(mention(user_id) for user_id in maybe_rsvps) or 'None'}"
+        + f"**Going:**\n{', '.join(mention(user_id) for user_id in yes_rsvps) or 'None'}\n"
+        + f"**Maybe:**\n{', '.join(mention(user_id) for user_id in maybe_rsvps) or 'None'}"
     )
     return "\n".join([intro, event_details, rsvps])
 
