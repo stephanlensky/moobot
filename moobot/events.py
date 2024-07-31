@@ -359,6 +359,11 @@ async def create_event_channel(client: discord.Client, event: MoobloomEvent) -> 
         session.commit()
         _logger.info(f"Created channel {event.channel_name} for event {event.name}")
 
+        for rsvp in event.rsvps:
+            user = await client.fetch_user(int(rsvp.user_id))
+            await channel.set_permissions(user, overwrite=PermissionOverwrite(read_messages=True))
+            _logger.info(f"Added {user.name} to event channel {channel.name}")
+
 
 async def add_calendar_reaction_handler(bot: DiscordBot) -> None:
     calendar_channel = get_calendar_channel(bot.client)
