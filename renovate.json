@@ -1,6 +1,14 @@
 {
-  "extends": [
-    "config:base"
-  ],
-  "dependencyDashboard": false
+  "extends": ["config:base"],
+  "dependencyDashboard": false,
+  "packageRules": [
+    {
+      "groupName": "python non-major dependencies",
+      "groupSlug": "python-minor-patch",
+      "matchLanguages": ["python"],
+      "excludeDepNames": ["python"],
+      "matchPackagePatterns": ["*"],
+      "matchUpdateTypes": ["minor", "patch"]
+    }
+  ]
 }
