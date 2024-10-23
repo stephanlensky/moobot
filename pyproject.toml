@@ -19,7 +19,7 @@ moobot = "moobot._entry:run_discord_bot"
 
 [tool.poetry.dependencies]
 python = ">=3.10,<3.11"
-"discord.py" = { git = "https://github.com/Rapptz/discord.py.git", rev = "277d35c" }
+"discord.py" = { git = "https://github.com/Rapptz/discord.py.git", rev = "e94fb455274d78969922082bb9822f88345984d5" }
 python-dateutil = "^2.8.2"
 pydantic = {extras = ["dotenv"], version = "^1.9.0"}
 psycopg2 = "^2.9.3"
