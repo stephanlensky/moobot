@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     log_date_format: str = "%Y-%m-%d %H:%M:%S"
 
     # db credentials
+    postgres_host: str = "db"
     postgres_user: str
     postgres_password: str
 

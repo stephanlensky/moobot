@@ -9,7 +9,7 @@ from moobot.settings import get_settings
 settings = get_settings()
 
 credentials = f"{settings.postgres_user}:{settings.postgres_password}"
-host = f"db:5432/{settings.postgres_user}"
+host = f"{settings.postgres_host}:5432/{settings.postgres_user}"
 connection_string = f"postgresql+psycopg://{credentials}@{host}"
 
 engine = create_engine(connection_string, future=True)
