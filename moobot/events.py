@@ -38,6 +38,7 @@ from moobot.db.models import (
     MoobloomEventRSVP,
 )
 from moobot.db.session import Session
+from moobot.discord.emoji import get_custom_emoji_by_name
 from moobot.settings import get_settings
 from moobot.util.discord import channel_mention, mention
 from moobot.util.format import format_event_duration, format_single_event_for_calendar
@@ -99,10 +100,6 @@ async def get_event_channel(client: discord.Client, event: MoobloomEvent) -> Tex
     if not isinstance(event_channel, TextChannel):
         raise ValueError(f"Event channel has bad type {type(event_channel)}")
     return event_channel
-
-
-def get_custom_emoji_by_name(client: discord.Client, emoji: str) -> Emoji:
-    return next(e for e in client.emojis if e.name == emoji)
 
 
 async def send_event_announcements(client: discord.Client) -> None:
@@ -224,7 +221,7 @@ async def update_event_google_calendar_events(client: discord.Client, event: Moo
     for rsvp in event.rsvps:
         user = await client.fetch_user(int(rsvp.user_id))
         handle_google_calendar_sync_on_rsvp(
-            user, event, MoobloomEventAttendanceType(rsvp.attendance_type)
+            client, user, event, MoobloomEventAttendanceType(rsvp.attendance_type)
         )
 
 
@@ -294,7 +291,7 @@ async def update_calendar_message(client: discord.Client) -> None:
         " below.\nIn order to reduce notification spam, each event has a private channel for"
         f" discussion and planning. To gain access, RSVP in {announcement_channel.mention}."
     )
-    all_events_react_emoji = get_custom_emoji_by_name(
+    all_events_react_emoji = await get_custom_emoji_by_name(
         client, settings.get_all_event_channels_react_emoji_name
     )
     all_events_react_section = (
@@ -302,7 +299,7 @@ async def update_calendar_message(client: discord.Client) -> None:
         f" receiving a ton of notifications), react with {all_events_react_emoji}."
     )
 
-    google_calendar_sync_react_emoji = get_custom_emoji_by_name(
+    google_calendar_sync_react_emoji = await get_custom_emoji_by_name(
         client, settings.google_calendar_sync_react_emoji_name
     )
     google_calendar_sync_react_section = (
@@ -351,7 +348,9 @@ async def create_event_channel(client: discord.Client, event: MoobloomEvent) -> 
         all_events_role: PermissionOverwrite(read_messages=True),
     }
     channel = await guild.create_text_channel(
-        name=event.channel_name, category=category, overwrites=overwrites  # type: ignore
+        name=event.channel_name,
+        category=category,
+        overwrites=overwrites,  # type: ignore
     )
     with Session() as session:
         session.add(event)
@@ -368,10 +367,10 @@ async def create_event_channel(client: discord.Client, event: MoobloomEvent) -> 
 async def add_calendar_reaction_handler(bot: DiscordBot) -> None:
     calendar_channel = get_calendar_channel(bot.client)
     calendar_message = await get_calendar_message(bot.client, calendar_channel)
-    all_events_react_emoji = get_custom_emoji_by_name(
+    all_events_react_emoji = await get_custom_emoji_by_name(
         bot.client, settings.get_all_event_channels_react_emoji_name
     )
-    google_calendar_sync_react_emoji = get_custom_emoji_by_name(
+    google_calendar_sync_react_emoji = await get_custom_emoji_by_name(
         bot.client, settings.google_calendar_sync_react_emoji_name
     )
 
@@ -520,7 +519,7 @@ async def handle_rsvp(
                     user, overwrite=PermissionOverwrite(read_messages=True)
                 )
             # sync to gcalendar if necessary
-            handle_google_calendar_sync_on_rsvp(user, event, rsvp_type)
+            handle_google_calendar_sync_on_rsvp(client, user, event, rsvp_type)
             # remove reactions from other rsvp types
             message = await announcement_channel.fetch_message(int(event.announcement_message_id))  # type: ignore
             if message is None:
@@ -546,7 +545,9 @@ async def handle_rsvp(
                     _logger.info(f"Removing {user.name} from event channel {channel.name}")
                     await channel.set_permissions(user, overwrite=None)
                 # removing reaction is equivalent to RSVPing "No" for the purposes of calendar sync
-                handle_google_calendar_sync_on_rsvp(user, event, MoobloomEventAttendanceType.NO)
+                handle_google_calendar_sync_on_rsvp(
+                    client, user, event, MoobloomEventAttendanceType.NO
+                )
 
         # update list of RSVPs in private event channel intro message
         if event.channel_introduction_message_id is not None:
@@ -555,7 +556,10 @@ async def handle_rsvp(
 
 
 def handle_google_calendar_sync_on_rsvp(
-    user: Member | User, event: MoobloomEvent, rsvp_type: MoobloomEventAttendanceType
+    client: discord.Client,
+    user: Member | User,
+    event: MoobloomEvent,
+    rsvp_type: MoobloomEventAttendanceType,
 ) -> None:
     with Session() as session:
         if (google_api_user := get_api_user_by_user_id(session, user.id)) is None:
@@ -564,7 +568,7 @@ def handle_google_calendar_sync_on_rsvp(
     _logger.debug(
         f"Handling Google calendar sync for user {user.name}'s RSVP {rsvp_type} to {event.name}"
     )
-    loop = asyncio.get_running_loop()
+    loop = client.loop
 
     def calendar_worker() -> None:
         if google_api_user is None:
@@ -624,7 +628,10 @@ def complete_unfinished_google_calendar_setups(bot: DiscordBot) -> None:
             for rsvp in rsvps:
                 event = rsvp.event
                 handle_google_calendar_sync_on_rsvp(
-                    discord_user, event, MoobloomEventAttendanceType(rsvp.attendance_type)
+                    bot.client,
+                    discord_user,
+                    event,
+                    MoobloomEventAttendanceType(rsvp.attendance_type),
                 )
 
             api_user.setup_finished = True

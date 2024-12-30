@@ -62,4 +62,4 @@ async def delete_event_cmd(
 
 async def delete_google_calendar_event(bot: DiscordBot, user_id: int, event: MoobloomEvent) -> None:
     user = await bot.client.fetch_user(user_id)
-    handle_google_calendar_sync_on_rsvp(user, event, MoobloomEventAttendanceType.NO)
+    handle_google_calendar_sync_on_rsvp(bot.client, user, event, MoobloomEventAttendanceType.NO)

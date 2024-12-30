@@ -1,9 +1,16 @@
 import logging
 
-from pydantic import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        # Use top level .env file (one level above ./backend/)
+        env_file="../.env",
+        env_ignore_empty=True,
+        extra="ignore",
+    )
+
     tz: str
 
     # logging config
@@ -35,10 +42,6 @@ class Settings(BaseSettings):
     google_project_id: str
     google_client_secret: str
     google_redirect_uri_host: str
-
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 def get_settings() -> Settings:

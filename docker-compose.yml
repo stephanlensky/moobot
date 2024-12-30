@@ -1,27 +1,24 @@
-version: "3.7"
-
 services:
   service: &service
-    container_name: moobot
     env_file:
       - ".env"
     build:
-      dockerfile: ./docker/service.dockerfile
       context: .
       target: prod
       args:
         app_env: prod
-    stop_grace_period: "2s"
     volumes:
-      - ./:/app
+      - ./moobot:/app/moobot
+      - ./scripts:/app/scripts
+      - ./static:/app/static
+      - ./templates:/app/templates
+      - ./tests:/app/tests
     links:
       - db
     depends_on:
       - db
     ports:
       - "3001:3000"
-    networks:
-      - moobot
 
   db:
     image: postgres:14-alpine
@@ -29,37 +26,6 @@ services:
       - ".env"
     volumes:
       - pgdata:/var/lib/postgresql/data
-    restart: "unless-stopped"
-    networks:
-      - moobot
-
-  devbox: &devbox
-    <<: *service
-    build:
-      dockerfile: ./docker/service.dockerfile
-      context: .
-      target: dev
-      args:
-        app_env: dev
-    entrypoint: /bin/bash
-    stdin_open: true
-    tty: true
-    networks:
-      - moobot
-
-  test:
-    <<: *devbox
-    command: ["/bin/sh", "docker/scripts/test-docker-entrypoint.sh"]
-    networks:
-      - moobot
-
-  migrations:
-    <<: *service
-    depends_on:
-      - db
-    command: ["/bin/bash", "docker/scripts/migrations-docker-entrypoint.sh"]
-    networks:
-      - moobot
 
   pgweb:
     image: sosedoff/pgweb
@@ -74,11 +40,6 @@ services:
       - db
     depends_on:
       - db
-    networks:
-      - moobot
 
 volumes:
   pgdata:
-
-networks:
-  moobot:

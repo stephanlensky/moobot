@@ -1,66 +1,41 @@
-[tool.poetry]
+[project]
 name = "moobot"
-version = "0.0.1"
+version = "0.1.0"
 description = "Private server management bot."
-authors = ["Stephan Lensky <public@slensky.com>"]
 readme = "README.md"
-license = "AGPL-3.0-only"
-homepage = "https://github.com/stephanlensky/moobot"
-repository = "https://github.com/stephanlensky/moobot"
-include = [
-    "LICENSE",
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+dependencies = [
+    "apscheduler>=3.11.0",
+    "fastapi[standard]>=0.115.6",
+    "google-api-python-client>=2.156.0",
+    "google-auth-httplib2>=0.2.0",
+    "google-auth-oauthlib>=1.2.1",
+    "jinja2>=3.1.5",
+    "psycopg[binary]>=3.2.3",
+    "pydantic-settings>=2.7.0",
+    "pydantic>=2.10.4",
+    "python-dateutil>=2.9.0.post0",
+    "sqlalchemy>=2.0.36",
+    "discord-py>=2.4.0",
 ]
-packages = [
-    {include = "moobot"}
+
+[dependency-groups]
+dev = [
+    "google-api-python-client-stubs>=1.28.0",
+    "mypy>=1.14.1",
+    "pytest>=8.3.4",
+    "pytest-cov>=6.0.0",
+    "pytest-mock>=3.14.0",
+    "ruff>=0.8.4",
+    "types-python-dateutil>=2.9.0.20241206",
 ]
-
-[tool.poetry.scripts]
-moobot = "moobot._entry:run_discord_bot"
-
-[tool.poetry.dependencies]
-python = ">=3.10,<3.11"
-"discord.py" = { git = "https://github.com/Rapptz/discord.py.git", rev = "277d35c" }
-python-dateutil = "^2.8.2"
-pydantic = {extras = ["dotenv"], version = "^1.9.0"}
-psycopg2 = "^2.9.3"
-APScheduler = "^3.9.1"
-SQLAlchemy = "^2.0.5"
-google-api-python-client = "^2.80.0"
-google-auth-httplib2 = "^0.1.0"
-google-auth-oauthlib = "^1.0.0"
-fastapi = "^0.93.0"
-uvicorn = "^0.20.0"
-Jinja2 = "^3.1.2"
-
-[tool.poetry.dev-dependencies]
-pytest = "^7.2.1"
-pytest-mock = "^3.10.0"
-black = "^23.1.0"
-isort = "^5.12.0"
-mypy = "^1.0.0"
-docformatter = "^1.5.1"
-flake8 = "^6.0.0"
-flake8-bugbear = "^23.2.13"
-flake8-comprehensions = "^3.10.1"
-Flake8-pyproject = "^1.2.2"
-pytest-cov = "^4.0.0"
-types-python-dateutil = "^2.8.19"
-google-api-python-client-stubs = "^1.16.0"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.flake8]
-max-line-length = 100
-ignore = ["B008", "E203", "E501", "E711", "E712", "W503"]
-
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 100
-
-[tool.black]
+[tool.ruff]
 line-length = 100
 
 [tool.mypy]
