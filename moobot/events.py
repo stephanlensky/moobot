@@ -335,6 +335,9 @@ async def add_reaction_if_missing(message: Message, emoji: Emoji) -> None:
 
 
 async def create_event_channel(client: discord.Client, event: MoobloomEvent) -> None:
+    if event.channel_name is None:
+        raise ValueError(f"Event {event.name} has no channel name")
+
     guild = get_announcement_channel(client).guild
     category = get(guild.categories, name=settings.active_events_category_name)
     if category is None:
@@ -359,9 +362,9 @@ async def create_event_channel(client: discord.Client, event: MoobloomEvent) -> 
         _logger.info(f"Created channel {event.channel_name} for event {event.name}")
 
         for rsvp in event.rsvps:
-            user = await client.fetch_user(int(rsvp.user_id))
-            await channel.set_permissions(user, overwrite=PermissionOverwrite(read_messages=True))
-            _logger.info(f"Added {user.name} to event channel {channel.name}")
+            member = await guild.fetch_member(int(rsvp.user_id))
+            await channel.set_permissions(member, overwrite=PermissionOverwrite(read_messages=True))
+            _logger.info(f"Added {member.name} to event channel {channel.name}")
 
 
 async def add_calendar_reaction_handler(bot: DiscordBot) -> None:
