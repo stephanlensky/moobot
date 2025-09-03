@@ -132,6 +132,7 @@ def _build_gcalendar_event(
     if event.description is not None:
         gcalendar_event["description"] = event.description
 
+    _logger.debug(f"Built Google Calendar event: {gcalendar_event}")
     return gcalendar_event
 
 

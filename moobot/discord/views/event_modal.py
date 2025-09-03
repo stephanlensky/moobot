@@ -47,10 +47,21 @@ def _parse_event_time(raw_time: str) -> EventTime:
         end = dataclasses.replace(start)  # copy object
 
     # this event is probably occurring next year
-    if end.dt < datetime.now():
-        _logger.info("User specified date appears to be in the past, automatically adding 1 year")
+    if start.dt < datetime.now():
+        _logger.info(
+            "User specified start date appears to be in the past, automatically adding 1 year"
+        )
         start.dt = start.dt.replace(year=start.dt.year + 1)
+    if end.dt < datetime.now():
+        _logger.info(
+            "User specified end date appears to be in the past, automatically adding 1 year"
+        )
         end.dt = end.dt.replace(year=end.dt.year + 1)
+
+    if start.dt > end.dt:
+        raise ValueError(
+            f"Could not parse event time: start date ({start.dt}) is after end date ({end.dt})"
+        )
 
     return EventTime(
         start_date=start.dt.date(),
@@ -169,10 +180,10 @@ class CreateEventModal(Modal):
 
         try:
             time = _parse_event_time(self.time.value)
-        except ValueError:
+        except ValueError as e:
             await interaction.response.send_message(
                 f"Sorry {interaction.user.mention}, I didn't understand the time duration you"
-                " specified. Please try again.",
+                f" specified. Please try again.\n```{e}```",
                 ephemeral=True,
             )
             return

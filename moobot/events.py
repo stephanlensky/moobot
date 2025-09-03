@@ -599,6 +599,10 @@ def handle_google_calendar_sync_on_rsvp(
             loop.create_task(
                 user.send(GOOGLE_CALENDAR_SYNC_TOKEN_NOT_AUTHORIZED.format(name=user.display_name))
             )
+        except Exception:
+            _logger.exception(
+                f"Error while syncing event {event.name} ({event.id}) for {user.name}."
+            )
 
     worker_thread = Thread(target=calendar_worker)
     worker_thread.run()
