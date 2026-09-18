@@ -7,3 +7,5 @@ app.egg-info
 .coverage
 htmlcov
 .venv
+# local, gitignored pin that uv would otherwise honor over the base image's Python
+.python-version
