@@ -46,15 +46,25 @@ def _parse_event_time(raw_time: str) -> EventTime:
     else:
         end = dataclasses.replace(start)  # copy object
 
-    # this event is probably occurring next year
-    if start.dt < datetime.now():
+    # if the user didn't specify a year and the event appears to have already passed, they probably
+    # meant next year. compare against the start of today rather than the current time, so that an
+    # event happening later today (or a date-only event for today, which parses to midnight) isn't
+    # pushed a year into the future. the start and end are shifted together to keep the range intact.
+    if not start.has_year and start.dt < datetime.now().replace(
+        hour=0, minute=0, second=0, microsecond=0
+    ):
         _logger.info(
             "User specified start date appears to be in the past, automatically adding 1 year"
         )
         start.dt = start.dt.replace(year=start.dt.year + 1)
-    if end.dt < datetime.now():
+        if not end.has_year:
+            end.dt = end.dt.replace(year=end.dt.year + 1)
+
+    # the end of a range can still land before the start when it wraps the new year,
+    # e.g. "12/31 to 1/1"
+    if not end.has_year and end.dt < start.dt:
         _logger.info(
-            "User specified end date appears to be in the past, automatically adding 1 year"
+            "User specified end date is before the start date, automatically adding 1 year"
         )
         end.dt = end.dt.replace(year=end.dt.year + 1)
 

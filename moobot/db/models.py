@@ -5,7 +5,7 @@ from enum import Enum
 from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, func
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 
 from moobot.settings import get_settings
 
@@ -56,6 +56,14 @@ class MoobloomEvent(Base):
 
     reactions_created: Mapped[bool] = mapped_column(default=False)
     rsvps: Mapped[list["MoobloomEventRSVP"]] = relationship(back_populates="event")
+
+    @validates("channel_name")
+    def remove_pound_symbol_from_channel_name(self, key: str, value: str | None) -> str | None:
+        """
+        Channel names are often written the way they're mentioned in Discord ("#some-channel"), but
+        the API expects a bare name.
+        """
+        return value.removeprefix("#") if value else value
 
 
 class MoobloomEventAttendanceType(str, Enum):
