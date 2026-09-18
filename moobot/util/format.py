@@ -2,6 +2,7 @@ import calendar
 from datetime import date, datetime
 
 from moobot.db.models import MoobloomEvent
+from moobot.util.time import today as local_today
 
 
 def format_event_duration(
@@ -121,12 +122,12 @@ def format_single_event_for_calendar(event: MoobloomEvent) -> str:
     formatted_duration = format_event_duration_for_calendar(
         event.start_date, event.start_time, event.end_date, event.end_time
     )
-    if event.start_date == date.today():
+    if event.start_date == local_today():
         return f"**📢  (Today!) {formatted_duration}: {event.name}**"
     if (
         event.start_date != event.end_date
-        and date.today() >= event.start_date
-        and date.today() <= event.end_date
+        and local_today() >= event.start_date
+        and local_today() <= event.end_date
     ):
         return f"**📢  (Ongoing) {formatted_duration}: {event.name}**"
     return f"{formatted_duration}: {event.name}"

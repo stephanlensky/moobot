@@ -9,8 +9,10 @@ from moobot.discord.views.event_modal import (
     _parse_event_description,
     _parse_event_time,
 )
+from moobot.util.time import now as local_now
+from moobot.util.time import today as local_today
 
-SEPTEMBER_21 = datetime(year=datetime.now().year, month=9, day=21)
+SEPTEMBER_21 = datetime(year=local_now().year, month=9, day=21)  # noqa: DTZ001
 SEPTEMBER_21_7PM = SEPTEMBER_21.replace(hour=19)
 SEPTEMBER_21_10PM = SEPTEMBER_21.replace(hour=22)
 SEPTEMBER_28 = SEPTEMBER_21.replace(day=28)
@@ -160,14 +162,13 @@ def test__parse_event_description__various_descriptions__parses_correctly(
 
 # a fixed "now" so the year-inference tests don't depend on the day they're run. mid-year and
 # mid-day, so that dates on either side of today are unambiguous.
-FROZEN_NOW = datetime(year=2026, month=6, day=15, hour=12)
+FROZEN_NOW = datetime(year=2026, month=6, day=15, hour=12)  # noqa: DTZ001
 
 
 @pytest.fixture
 def frozen_now(mocker: MockerFixture) -> datetime:
-    """Pin datetime.now() inside the event modal to FROZEN_NOW."""
-    fake_datetime = mocker.patch("moobot.discord.views.event_modal.datetime", wraps=datetime)
-    fake_datetime.now.return_value = FROZEN_NOW
+    """Pin the event modal's notion of "now" to FROZEN_NOW."""
+    mocker.patch("moobot.discord.views.event_modal.local_now", return_value=FROZEN_NOW)
     return FROZEN_NOW
 
 
@@ -271,7 +272,7 @@ def test__parse_event_time__range_ending_on_weekday__uses_that_weekday() -> None
     way a bare time like "10PM" is. dateutil resolves it against the real current date, so this is
     asserted relative to today rather than against a frozen clock.
     """
-    today = date.today()
+    today = local_today()
     # the coming Sunday, which is today when today is already a Sunday
     next_sunday = today + timedelta(days=(6 - today.weekday()) % 7)
 

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import logging
 from asyncio import create_task
-from typing import TYPE_CHECKING, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from discord import Interaction
 from sqlalchemy.orm import Session

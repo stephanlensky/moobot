@@ -31,7 +31,7 @@ async def whos_going_cmd(
             formatted_rsvps[attendance_type] = "None"
         else:
             formatted_rsvps[attendance_type] = "\n".join(
-                [f"- {mention(user_id)}" for user_id in rsvps[attendance_type]]
+                [f"- {mention(user_id)}" for user_id in attending_users]
             )
 
     going = f"**Going:**\n{formatted_rsvps[MoobloomEventAttendanceType.YES]}"

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import Enum
-from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
@@ -22,32 +21,32 @@ class MoobloomEvent(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str]
     create_channel: Mapped[bool] = mapped_column(default=True)
-    channel_name: Mapped[Optional[str]]
+    channel_name: Mapped[str | None]
 
     # event time fields
     # start_date and end_date must always be set
     # for single-day events, end_date == start_date
     # for events with a start time and without a set end time, end_time should be None
     start_date: Mapped[date]
-    start_time: Mapped[Optional[datetime]]
+    start_time: Mapped[datetime | None]
     end_date: Mapped[date]
-    end_time: Mapped[Optional[datetime]]
+    end_time: Mapped[datetime | None]
 
-    location: Mapped[Optional[str]]
-    description: Mapped[Optional[str]]
-    url: Mapped[Optional[str]]
-    image_url: Mapped[Optional[str]]
-    thumbnail_url: Mapped[Optional[str]]
+    location: Mapped[str | None]
+    description: Mapped[str | None]
+    url: Mapped[str | None]
+    image_url: Mapped[str | None]
+    thumbnail_url: Mapped[str | None]
 
-    announcement_message_id: Mapped[Optional[str]]
-    channel_id: Mapped[Optional[str]]
-    channel_introduction_message_id: Mapped[Optional[str]]
+    announcement_message_id: Mapped[str | None]
+    channel_id: Mapped[str | None]
+    channel_introduction_message_id: Mapped[str | None]
 
     out_of_sync: Mapped[bool] = mapped_column(default=False)
 
     # discord user ID
-    created_by: Mapped[Optional[str]]
-    updated_by: Mapped[Optional[str]]
+    created_by: Mapped[str | None]
+    updated_by: Mapped[str | None]
 
     deleted: Mapped[bool] = mapped_column(default=False)
 
@@ -55,7 +54,7 @@ class MoobloomEvent(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
     reactions_created: Mapped[bool] = mapped_column(default=False)
-    rsvps: Mapped[list["MoobloomEventRSVP"]] = relationship(back_populates="event")
+    rsvps: Mapped[list[MoobloomEventRSVP]] = relationship(back_populates="event")
 
     @validates("channel_name")
     def remove_pound_symbol_from_channel_name(self, key: str, value: str | None) -> str | None:
@@ -124,7 +123,7 @@ class GoogleApiUser(Base):
     refresh_token: Mapped[str]
     token_uri: Mapped[str]
     scopes: Mapped[str]
-    calendar_id: Mapped[Optional[str]]
+    calendar_id: Mapped[str | None]
 
     # Discord bot server must send a DM and create events for existing RSVPs before setup is finished
     setup_finished: Mapped[bool] = mapped_column(default=False)

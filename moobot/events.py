@@ -4,7 +4,6 @@ import asyncio
 import calendar
 import logging
 from asyncio import run_coroutine_threadsafe
-from datetime import date
 from threading import Thread
 from typing import TYPE_CHECKING
 
@@ -48,6 +47,7 @@ from moobot.util.google import (
     get_calendar_service,
     get_google_auth_url,
 )
+from moobot.util.time import today as local_today
 
 if TYPE_CHECKING:
     from discord.guild import GuildChannel
@@ -75,7 +75,7 @@ def get_calendar_channel(client: discord.Client) -> TextChannel:
     if calendar_channel is None:
         raise ValueError("Calendar channel does not exist")
     if not isinstance(calendar_channel, TextChannel):
-        raise ValueError(f"Calendar channel has bad type {type(calendar_channel)}")
+        raise TypeError(f"Calendar channel has bad type {type(calendar_channel)}")
     return calendar_channel
 
 
@@ -84,7 +84,7 @@ def get_announcement_channel(client: discord.Client) -> TextChannel:
     if announcement_channel is None:
         raise ValueError("Announcement channel does not exist")
     if not isinstance(announcement_channel, TextChannel):
-        raise ValueError(f"Announcement channel has bad type {type(announcement_channel)}")
+        raise TypeError(f"Announcement channel has bad type {type(announcement_channel)}")
     return announcement_channel
 
 
@@ -98,7 +98,7 @@ async def get_event_channel(client: discord.Client, event: MoobloomEvent) -> Tex
     if event_channel is None:
         raise ValueError("Event channel does not exist")
     if not isinstance(event_channel, TextChannel):
-        raise ValueError(f"Event channel has bad type {type(event_channel)}")
+        raise TypeError(f"Event channel has bad type {type(event_channel)}")
     return event_channel
 
 
@@ -259,7 +259,7 @@ async def update_calendar_message(client: discord.Client) -> None:
         events: list[MoobloomEvent] = (
             session.query(MoobloomEvent)
             .filter(MoobloomEvent.deleted == False)
-            .filter(MoobloomEvent.end_date >= date.today())
+            .filter(MoobloomEvent.end_date >= local_today())
             .order_by(MoobloomEvent.start_date)
             .all()
         )
@@ -419,7 +419,7 @@ async def add_calendar_reaction_handler(bot: DiscordBot) -> None:
         action: ReactionAction, emoji: PartialEmoji, user: Member | User
     ) -> None:
         if not isinstance(user, Member):
-            raise ValueError("bot must be used on a server")
+            raise TypeError("bot must be used on a server")
         if emoji == all_events_react_emoji:
             await handle_all_events_react(action, emoji, user)
         elif emoji == google_calendar_sync_react_emoji:
@@ -469,7 +469,7 @@ def add_event_reaction_handler(bot: DiscordBot, event: MoobloomEvent) -> None:
         action: ReactionAction, emoji: PartialEmoji, user: Member | User
     ) -> None:
         if not isinstance(user, Member):
-            raise ValueError("bot must be used on a server")
+            raise TypeError("bot must be used on a server")
         if bot.client.user is None:
             raise ValueError("can't handle message reaction, bot is not logged in!")
         if user.id == bot.client.user.id or emoji.name not in (
@@ -510,7 +510,7 @@ async def handle_rsvp(
             if channel is None:
                 raise ValueError(f"Channel {event.channel_id} for event {event.name} not found")
         elif event.create_channel:
-            _logger.warn(f"Channel for event {event.name} not yet created")
+            _logger.warning(f"Channel for event {event.name} not yet created")
 
         if action == action.ADDED:
             _logger.info(f"Updating RSVP to {rsvp_type} to {event.name} for user {user.name}")
@@ -627,7 +627,7 @@ def complete_unfinished_google_calendar_setups(bot: DiscordBot) -> None:
                 .join(MoobloomEventRSVP.event)
                 .filter(MoobloomEventRSVP.user_id == api_user.user_id)
                 .filter(MoobloomEventRSVP.attendance_type != MoobloomEventAttendanceType.NO)
-                .filter(MoobloomEvent.end_date >= date.today())
+                .filter(MoobloomEvent.end_date >= local_today())
                 .order_by(MoobloomEvent.start_date)
                 .all()
             )
@@ -704,7 +704,7 @@ def get_event_channel_introduction_message_content(event: MoobloomEvent) -> str:
         + f"**Going:**\n{', '.join(mention(user_id) for user_id in yes_rsvps) or 'None'}\n"
         + f"**Maybe:**\n{', '.join(mention(user_id) for user_id in maybe_rsvps) or 'None'}"
     )
-    return "\n".join([intro, event_details, rsvps])
+    return f"{intro}\n{event_details}\n{rsvps}"
 
 
 async def update_event_channel_introduction(client: discord.Client, event: MoobloomEvent) -> None:

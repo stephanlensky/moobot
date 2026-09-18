@@ -1,5 +1,5 @@
 import time
-from typing import Generator
+from collections.abc import Generator
 
 from sqlalchemy import create_engine
 from sqlalchemy.exc import OperationalError
@@ -33,6 +33,6 @@ except OperationalError:
             retries += 1
 
 
-def get_session() -> Generator[SessionCls, None, None]:
+def get_session() -> Generator[SessionCls]:
     with Session() as session:
         yield session

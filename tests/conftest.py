@@ -1,4 +1,4 @@
-from typing import Generator
+from collections.abc import Generator
 
 import pytest
 from pytest_mock import MockerFixture
@@ -13,7 +13,7 @@ sqlite_engine = create_engine(
 
 
 @pytest.fixture
-def test_db_session(mocker: MockerFixture) -> Generator[sessionmaker[Session], None, None]:
+def test_db_session(mocker: MockerFixture) -> Generator[sessionmaker[Session]]:
     """
     Test fixture for replacing the postgres session with a clean SQLite session.
     DB is cleared after use.

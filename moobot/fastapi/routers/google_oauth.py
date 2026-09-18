@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -17,19 +19,21 @@ def handle_oauth_response(
     code: str | None,
     state: str,
     request: Request,
-    session: Session = Depends(get_session),
+    session: Annotated[Session, Depends(get_session)],
 ) -> _TemplateResponse:
     if code is None:
         return templates.TemplateResponse(
+            request,
             "google_oauth.html",
-            {"request": request, "message": "❌ Missing authorization code! Please try again."},
+            {"message": "❌ Missing authorization code! Please try again."},
         )
 
     auth_session = get_auth_session_by_state(session, state)
     if auth_session is None:
         return templates.TemplateResponse(
+            request,
             "google_oauth.html",
-            {"request": request, "message": "❌ Invalid authorization state. Please try again."},
+            {"message": "❌ Invalid authorization state. Please try again."},
         )
 
     user_id = int(auth_session.user_id)
@@ -46,6 +50,4 @@ def handle_oauth_response(
         commit=True,
     )
 
-    return templates.TemplateResponse(
-        "google_oauth.html", {"request": request, "message": "✅ Success!"}
-    )
+    return templates.TemplateResponse(request, "google_oauth.html", {"message": "✅ Success!"})

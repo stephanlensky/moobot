@@ -5,9 +5,10 @@ import logging
 import random
 import re
 import traceback
-from datetime import datetime
+from collections.abc import Callable, Coroutine
 from enum import Enum
-from typing import Any, Callable, Coroutine, Pattern
+from re import Pattern
+from typing import Any
 
 import discord
 from apscheduler.triggers.interval import IntervalTrigger
@@ -30,6 +31,7 @@ from moobot.discord.event_option import event_autocomplete, get_event_from_optio
 from moobot.events import complete_unfinished_google_calendar_setups, initialize_events
 from moobot.scheduler import get_async_scheduler, get_threadpool_scheduler
 from moobot.settings import get_settings
+from moobot.util.time import now as local_now
 
 settings = get_settings()
 _logger = logging.getLogger(__name__)
@@ -68,13 +70,13 @@ class DiscordBot:
             initialize_events,
             args=(self,),
             trigger=IntervalTrigger(seconds=60 * 5),
-            next_run_time=datetime.now(),
+            next_run_time=local_now(),
         )
         self.threadpool_scheduler.add_job(
             complete_unfinished_google_calendar_setups,
             args=(self,),
             trigger=IntervalTrigger(seconds=10),
-            next_run_time=datetime.now(),
+            next_run_time=local_now(),
         )
         for guild in self.client.guilds:
             _logger.info(f"Adding commands to guild {guild.name}")
@@ -111,11 +113,11 @@ class DiscordBot:
             return
 
         _logger.info(f"Received command: {command}")
-        for pattern in _discord_bot_commands:
+        for pattern, handler in _discord_bot_commands.items():
             match = pattern.match(command)
             if match:
                 try:
-                    await _discord_bot_commands[pattern](self, message, match)
+                    await handler(self, message, match)
                 except asyncio.CancelledError:
                     raise
                 except Exception:
@@ -195,8 +197,6 @@ class DiscordBot:
 
 
 async def start() -> None:
-    loop = asyncio.get_running_loop()
-
     intents = discord.Intents(
         messages=True,
         guild_messages=True,
@@ -205,7 +205,7 @@ async def start() -> None:
         reactions=True,
         members=True,
     )
-    client = discord.Client(intents=intents, loop=loop)
+    client = discord.Client(intents=intents)
     discord_bot: DiscordBot = DiscordBot(client)
 
     @client.event

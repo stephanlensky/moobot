@@ -3,9 +3,10 @@ from __future__ import annotations
 import dataclasses
 import logging
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import TYPE_CHECKING, Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from discord import Interaction, TextStyle
 from discord.ui import Modal, TextInput
@@ -13,6 +14,7 @@ from discord.ui import Modal, TextInput
 from moobot.db.models import MoobloomEvent
 from moobot.util.date_parser import TimeAwareParserResult, time_aware_parser
 from moobot.util.format import format_event_duration_for_event_modal
+from moobot.util.time import now as local_now
 
 if TYPE_CHECKING:
     from moobot.discord.discord_bot import DiscordBot
@@ -50,7 +52,7 @@ def _parse_event_time(raw_time: str) -> EventTime:
     # meant next year. compare against the start of today rather than the current time, so that an
     # event happening later today (or a date-only event for today, which parses to midnight) isn't
     # pushed a year into the future. the start and end are shifted together to keep the range intact.
-    if not start.has_year and start.dt < datetime.now().replace(
+    if not start.has_year and start.dt < local_now().replace(
         hour=0, minute=0, second=0, microsecond=0
     ):
         _logger.info(
