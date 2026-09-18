@@ -15,6 +15,8 @@ class Settings(BaseSettings):
 
     # logging config
     log_level: int = logging.DEBUG
+    # discord.py is very noisy at DEBUG (it logs raw gateway payloads), so default it lower
+    discord_log_level: int = logging.INFO
     log_format: str = "%(asctime)s [%(process)d] [%(levelname)s] %(name)-16s %(message)s"
     log_date_format: str = "%Y-%m-%d %H:%M:%S"
 
