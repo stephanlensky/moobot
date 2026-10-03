@@ -279,3 +279,33 @@ def test__parse_event_time__range_ending_on_weekday__uses_that_weekday() -> None
 
     assert parsed.start_date == today
     assert parsed.end_date == next_sunday
+
+
+def timed(start: datetime, end: datetime) -> EventTime:
+    return EventTime(start_date=start.date(), start_time=start, end_date=end.date(), end_time=end)
+
+
+@pytest.mark.parametrize(
+    "time_str,expected",
+    [
+        pytest.param(
+            "6/20 10PM to 1AM",
+            timed(datetime(2026, 6, 20, 22), datetime(2026, 6, 21, 1)),  # noqa: DTZ001
+            id="same month",
+        ),
+        pytest.param(
+            "12/31 10PM to 1AM",
+            timed(datetime(2026, 12, 31, 22), datetime(2027, 1, 1, 1)),  # noqa: DTZ001
+            id="new year's eve",
+        ),
+        pytest.param(
+            "6/14 10PM to 1AM",
+            timed(datetime(2027, 6, 14, 22), datetime(2027, 6, 15, 1)),  # noqa: DTZ001
+            id="past event moves to next year",
+        ),
+    ],
+)
+def test__parse_event_time__end_time_before_start_time__ends_next_day(
+    frozen_now: datetime, time_str: str, expected: EventTime
+) -> None:
+    assert _parse_event_time(time_str) == expected

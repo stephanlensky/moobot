@@ -5,7 +5,7 @@ import logging
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from discord import Interaction, TextStyle
@@ -33,6 +33,14 @@ class EventTime:
     end_time: datetime | None
 
 
+def _roll_end_past_start(start: TimeAwareParserResult, end: TimeAwareParserResult) -> datetime:
+    if end.dt >= start.dt:
+        return end.dt
+    if not end.has_date:
+        return end.dt + timedelta(days=1)
+    return end.dt
+
+
 def _parse_event_time(raw_time: str) -> EventTime:
     time_parts = raw_time.split(" to ")
     if len(time_parts) > 2:
@@ -45,6 +53,7 @@ def _parse_event_time(raw_time: str) -> EventTime:
         # support strings like "9/21 7pm to 10pm"
         if not end.has_date:
             end.dt = end.dt.replace(year=start.dt.year, month=start.dt.month, day=start.dt.day)
+        end.dt = _roll_end_past_start(start, end)
     else:
         end = dataclasses.replace(start)  # copy object
 
