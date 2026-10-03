@@ -9,6 +9,7 @@ class TimeAwareParserResult:
     dt: datetime
     has_time: bool
     has_date: bool
+    has_month: bool
     has_year: bool
 
 
@@ -21,6 +22,7 @@ class TimeAwareParser(parser.parser):
             # a weekday name like "Sunday" resolves to a real date even though no day-of-month
             # was given, so it counts as specifying a date
             has_date=res.day is not None or res.weekday is not None,
+            has_month=res.month is not None,
             has_year=res.year is not None,
         )
 

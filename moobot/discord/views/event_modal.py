@@ -5,9 +5,10 @@ import logging
 import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from dateutil.relativedelta import relativedelta
 from discord import Interaction, TextStyle
 from discord.ui import Modal, TextInput
 
@@ -33,18 +34,84 @@ class EventTime:
     end_time: datetime | None
 
 
+RANGE_SEPARATOR = re.compile(r"\s+to\s+|\s*[–—]\s*|\s+-\s+", re.IGNORECASE)
+
+
+def _split_event_time(raw_time: str) -> list[str]:
+    raw_time = raw_time.strip()
+    time_parts = RANGE_SEPARATOR.split(raw_time)
+    if len(time_parts) == 1:
+        return _split_on_range_hyphen(raw_time)
+    return time_parts
+
+
+def _split_on_range_hyphen(raw_time: str) -> list[str]:
+    range_hyphens = [
+        i for i, char in enumerate(raw_time) if char == "-" and _is_range_hyphen(raw_time, i)
+    ]
+    if len(range_hyphens) != 1:
+        return [raw_time]
+    hyphen = range_hyphens[0]
+    return [raw_time[:hyphen], raw_time[hyphen + 1 :]]
+
+
+def _is_range_hyphen(raw_time: str, i: int) -> bool:
+    before, after = raw_time[:i], raw_time[i + 1 :]
+    return (
+        before[-1:].isalpha()
+        or after[:1].isalpha()
+        or _contains_slash_date(before)
+        or _contains_month_name(before)
+    )
+
+
+def _contains_slash_date(text: str) -> bool:
+    return "/" in text
+
+
+def _contains_month_name(text: str) -> bool:
+    return any(time_aware_parser.info.month(word.strip(".,")) is not None for word in text.split())
+
+
+def _parse_time_part(part: str, default: datetime | None = None) -> TimeAwareParserResult:
+    result: TimeAwareParserResult = time_aware_parser.parse(part, default=default)  # type: ignore
+    if _has_abbreviated_year_in_the_past(part, result):
+        raise ValueError(
+            f"Could not parse event time: {part!r} was read as {result.dt.date()}, which has"
+            ' already passed. Use "to" between the start and end, e.g. "October 3 to 4"'
+        )
+    return result
+
+
+def _has_abbreviated_year_in_the_past(part: str, result: TimeAwareParserResult) -> bool:
+    is_abbreviated_year = result.has_year and str(result.dt.year) not in part
+    return is_abbreviated_year and result.dt.date() < local_now().date()
+
+
+def _start_of_day(dt: datetime) -> datetime:
+    return dt.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _roll_end_past_start(start: TimeAwareParserResult, end: TimeAwareParserResult) -> datetime:
+    if end.dt >= start.dt:
+        return end.dt
+    if not end.has_date:
+        return end.dt + timedelta(days=1)
+    if not end.has_month:
+        return end.dt + relativedelta(months=1)
+    return end.dt
+
+
 def _parse_event_time(raw_time: str) -> EventTime:
-    time_parts = raw_time.split(" to ")
+    time_parts = _split_event_time(raw_time)
     if len(time_parts) > 2:
         raise ValueError("Could not parse event time: too many parts")
 
-    start: TimeAwareParserResult = time_aware_parser.parse(time_parts[0])  # type: ignore
+    start = _parse_time_part(time_parts[0])
 
     if len(time_parts) == 2:
-        end: TimeAwareParserResult = time_aware_parser.parse(time_parts[1])  # type: ignore
-        # support strings like "9/21 7pm to 10pm"
-        if not end.has_date:
-            end.dt = end.dt.replace(year=start.dt.year, month=start.dt.month, day=start.dt.day)
+        end = _parse_time_part(time_parts[1], default=_start_of_day(start.dt))
+        end.dt = _roll_end_past_start(start, end)
     else:
         end = dataclasses.replace(start)  # copy object
 
