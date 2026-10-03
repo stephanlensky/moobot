@@ -9,10 +9,21 @@ from moobot.discord.views.event_modal import (
     _parse_event_description,
     _parse_event_time,
 )
-from moobot.util.time import now as local_now
 from moobot.util.time import today as local_today
 
-SEPTEMBER_21 = datetime(year=local_now().year, month=9, day=21)  # noqa: DTZ001
+# a fixed "now" so these tests don't depend on the day they're run. mid-year and
+# mid-day, so that dates on either side of today are unambiguous.
+FROZEN_NOW = datetime(year=2026, month=6, day=15, hour=12)  # noqa: DTZ001
+
+
+@pytest.fixture
+def frozen_now(mocker: MockerFixture) -> datetime:
+    """Pin the event modal's notion of "now" to FROZEN_NOW."""
+    mocker.patch("moobot.discord.views.event_modal.local_now", return_value=FROZEN_NOW)
+    return FROZEN_NOW
+
+
+SEPTEMBER_21 = datetime(year=FROZEN_NOW.year, month=9, day=21)  # noqa: DTZ001
 SEPTEMBER_21_7PM = SEPTEMBER_21.replace(hour=19)
 SEPTEMBER_21_10PM = SEPTEMBER_21.replace(hour=22)
 SEPTEMBER_28 = SEPTEMBER_21.replace(day=28)
@@ -94,7 +105,7 @@ SOME_MULTILINE_DESCRIPTION = "Some\nmultiline\ndescription"
     ],
 )
 def test__parse_event_time__various_time_strings__parses_correctly(
-    time_str: str, expected: EventTime
+    frozen_now: datetime, time_str: str, expected: EventTime
 ) -> None:
     assert _parse_event_time(time_str) == expected
 
@@ -158,18 +169,6 @@ def test__parse_event_description__various_descriptions__parses_correctly(
     description_str: str, expected: EventDescriptionAndURLs
 ) -> None:
     assert _parse_event_description(description_str) == expected
-
-
-# a fixed "now" so the year-inference tests don't depend on the day they're run. mid-year and
-# mid-day, so that dates on either side of today are unambiguous.
-FROZEN_NOW = datetime(year=2026, month=6, day=15, hour=12)  # noqa: DTZ001
-
-
-@pytest.fixture
-def frozen_now(mocker: MockerFixture) -> datetime:
-    """Pin the event modal's notion of "now" to FROZEN_NOW."""
-    mocker.patch("moobot.discord.views.event_modal.local_now", return_value=FROZEN_NOW)
-    return FROZEN_NOW
 
 
 @pytest.mark.parametrize(
