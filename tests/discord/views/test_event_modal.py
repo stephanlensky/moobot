@@ -309,3 +309,74 @@ def test__parse_event_time__end_time_before_start_time__ends_next_day(
     frozen_now: datetime, time_str: str, expected: EventTime
 ) -> None:
     assert _parse_event_time(time_str) == expected
+
+
+def all_day(start: date, end: date) -> EventTime:
+    return EventTime(start_date=start, start_time=None, end_date=end, end_time=None)
+
+
+JUNE_20 = date(2026, 6, 20)
+JUNE_21 = date(2026, 6, 21)
+
+
+@pytest.mark.parametrize(
+    "time_str",
+    [
+        pytest.param("June 20 - 21", id="spaced hyphen"),
+        pytest.param("June 20-21", id="bare hyphen after month name"),
+        pytest.param("June 20 -21", id="half-spaced hyphen"),
+        pytest.param("June 20 – 21", id="en dash"),
+        pytest.param("June 20—June 21", id="em dash"),
+        pytest.param("Jun. 20-21", id="abbreviated month"),
+        pytest.param("6/20-6/21", id="bare hyphen after slash date"),
+        pytest.param("6/20 - 6/21", id="spaced hyphen between slash dates"),
+        pytest.param("2026-06-20 - 2026-06-21", id="spaced hyphen between iso dates"),
+        pytest.param("June 20 TO 21", id="uppercase to"),
+    ],
+)
+def test__parse_event_time__range_separators__parse_as_range(
+    frozen_now: datetime, time_str: str
+) -> None:
+    assert _parse_event_time(time_str) == all_day(JUNE_20, JUNE_21)
+
+
+def test__parse_event_time__hyphen_between_letters__parses_as_range(frozen_now: datetime) -> None:
+    assert _parse_event_time("June 20 7PM-10PM") == timed(
+        datetime(2026, 6, 20, 19),  # noqa: DTZ001
+        datetime(2026, 6, 20, 22),  # noqa: DTZ001
+    )
+
+
+def test__parse_event_time__iso_date__is_not_split(frozen_now: datetime) -> None:
+    assert _parse_event_time("2026-06-20") == all_day(JUNE_20, JUNE_20)
+
+
+def test__parse_event_time__time_only_end__keeps_its_own_minutes(frozen_now: datetime) -> None:
+    assert _parse_event_time("6/20 7:30PM to 10PM") == timed(
+        datetime(2026, 6, 20, 19, 30),  # noqa: DTZ001
+        datetime(2026, 6, 20, 22),  # noqa: DTZ001
+    )
+
+
+def test__parse_event_time__bare_end_day__uses_start_month(frozen_now: datetime) -> None:
+    assert _parse_event_time("August 3 to 4") == all_day(date(2026, 8, 3), date(2026, 8, 4))
+
+
+def test__parse_event_time__bare_end_day_before_start_day__ends_next_month(
+    frozen_now: datetime,
+) -> None:
+    assert _parse_event_time("June 30 to 2") == all_day(date(2026, 6, 30), date(2026, 7, 2))
+
+
+def test__parse_event_time__abbreviated_year_in_the_future__is_accepted(
+    frozen_now: datetime,
+) -> None:
+    assert _parse_event_time("6/20/27") == all_day(date(2027, 6, 20), date(2027, 6, 20))
+
+
+@pytest.mark.parametrize("time_str", ["June 20 21", "6/20/25"])
+def test__parse_event_time__abbreviated_year_in_the_past__raises(
+    frozen_now: datetime, time_str: str
+) -> None:
+    with pytest.raises(ValueError, match="which has already passed"):
+        _parse_event_time(time_str)
