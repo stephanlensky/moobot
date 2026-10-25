@@ -89,7 +89,9 @@ def test_run_turn__calls_get_events_and_returns_final_output(
         {"role": "user", "content": "hi"},
         {"role": "assistant", "content": "moo!"},
     ]
-    context = AgentContext(bot=MagicMock(), channel_id=1, author_id=2, author_name="Alice")
+    context = AgentContext(
+        bot=MagicMock(), channel_id=1, author_id=2, author_name="Alice", message=MagicMock()
+    )
 
     result = asyncio.run(run_turn(transcript, "when is the hayride?", context))
 

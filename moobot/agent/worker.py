@@ -4,8 +4,9 @@ import asyncio
 import logging
 import re
 import traceback
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 from agents import (
@@ -16,7 +17,7 @@ from agents import (
     ToolCallItem,
     ToolCallOutputItem,
 )
-from discord import AllowedMentions, Message
+from discord import Message
 from sqlalchemy.exc import IntegrityError
 
 from moobot.agent.agent import run_turn
@@ -26,6 +27,7 @@ from moobot.agent.prompts import get_turn_input
 from moobot.agent.transcript import get_transcript_start_index
 from moobot.constants import (
     AGENT_EMPTY_OUTPUT_MESSAGE,
+    AGENT_REPLY_ALLOWED_MENTIONS,
     AGENT_TURN_FAILED_MESSAGE,
     DISCORD_MESSAGE_LENGTH_LIMIT,
 )
@@ -47,10 +49,10 @@ from moobot.storage import get_transcript, set_transcript
 
 if TYPE_CHECKING:
     from moobot.discord.discord_bot import DiscordBot
+    from moobot.discord.views.agent_action import AgentActionView
 
 _logger = logging.getLogger(__name__)
 
-REPLY_ALLOWED_MENTIONS = AllowedMentions(everyone=False, roles=False, users=True, replied_user=True)
 CODE_FENCE = "```"
 CODE_FENCE_PATTERN = re.compile(r"```([\w+#.-]{0,32})")
 
@@ -67,13 +69,24 @@ class Turn:
     content: str
 
 
+def get_channel_log_prefix(channel_id: int) -> str:
+    return f"[channel {channel_id}]"
+
+
 def get_turn_log_prefix(channel_id: int, turn_id: int) -> str:
-    return f"[channel {channel_id}] [turn {turn_id}]"
+    return f"{get_channel_log_prefix(channel_id)} [turn {turn_id}]"
+
+
+def log_lines(prefix: str, text: str) -> None:
+    _logger.info("\n".join(f"{prefix} {line}" for line in text.splitlines() or [""]))
+
+
+def log_channel(channel_id: int, text: str) -> None:
+    log_lines(get_channel_log_prefix(channel_id), text)
 
 
 def log_turn(channel_id: int, turn_id: int, text: str) -> None:
-    prefix = get_turn_log_prefix(channel_id, turn_id)
-    _logger.info("\n".join(f"{prefix} {line}" for line in text.splitlines() or [""]))
+    log_lines(get_turn_log_prefix(channel_id, turn_id), text)
 
 
 def get_run_item_text(item: RunItem) -> str:
@@ -150,26 +163,75 @@ def split_message(text: str, limit: int = DISCORD_MESSAGE_LENGTH_LIMIT) -> list[
     return [chunk for chunk in chunks if chunk.strip()]
 
 
-async def send_reply(message: Message, text: str) -> list[Message]:
-    first_chunk, *other_chunks = split_message(text)
-    response_messages = [await message.reply(first_chunk, allowed_mentions=REPLY_ALLOWED_MENTIONS)]
-    for chunk in other_chunks:
-        response_messages.append(
-            await message.channel.send(chunk, allowed_mentions=REPLY_ALLOWED_MENTIONS)
-        )
+async def send_chunk(
+    message: Message, chunk: str, is_first: bool, view: AgentActionView | None
+) -> Message:
+    kwargs: dict[str, Any] = {"allowed_mentions": AGENT_REPLY_ALLOWED_MENTIONS}
+    if view is not None:
+        kwargs["view"] = view
+    if is_first:
+        response = await message.reply(chunk, **kwargs)
+    else:
+        response = await message.channel.send(chunk, **kwargs)
+    if view is not None:
+        view.message = response
+    return response
+
+
+async def send_reply(
+    message: Message, text: str, views: Sequence[AgentActionView] = ()
+) -> list[Message]:
+    chunks = split_message(text)
+    response_messages = []
+    for index, chunk in enumerate(chunks):
+        view = views[0] if views and index == len(chunks) - 1 else None
+        response_messages.append(await send_chunk(message, chunk, index == 0, view))
+    for view in views[1:]:
+        response_messages.append(await send_chunk(message, view.label, False, view))
     return response_messages
+
+
+def get_views_text(views: Sequence[AgentActionView]) -> str:
+    return ", ".join(
+        f"{view.label} (message {view.message.id if view.message else None})" for view in views
+    )
 
 
 class AgentWorker:
     def __init__(self, bot: DiscordBot) -> None:
         self.bot = bot
         self.tasks: dict[int, asyncio.Task[None]] = {}
+        self.transcript_locks: dict[int, asyncio.Lock] = {}
         self.recovered = False
 
     def get_bot_user(self) -> discord.ClientUser:
         if self.bot.client.user is None:
             raise ValueError("Bot user is not set")
         return self.bot.client.user
+
+    def get_transcript_lock(self, channel_id: int) -> asyncio.Lock:
+        return self.transcript_locks.setdefault(channel_id, asyncio.Lock())
+
+    async def add_transcript_note(self, channel_id: int, text: str) -> None:
+        try:
+            async with self.get_transcript_lock(channel_id):
+                with Session() as session:
+                    conversation = get_active_conversation(session, channel_id)
+                    transcript_key = conversation.transcript_key if conversation else None
+                if transcript_key is None:
+                    log_channel(
+                        channel_id, f"No active conversation, skipping transcript note:\n{text}"
+                    )
+                    return
+                transcript = await get_transcript(transcript_key)
+                await set_transcript(
+                    transcript_key, [*transcript, {"role": "user", "content": text}]
+                )
+            log_channel(channel_id, f"Added transcript note to {transcript_key}:\n{text}")
+        except Exception:
+            _logger.exception(
+                f"{get_channel_log_prefix(channel_id)} Failed to add transcript note:\n{text}"
+            )
 
     def queue_turn(self, message: Message) -> None:
         channel_id = message.channel.id
@@ -267,56 +329,62 @@ class AgentWorker:
                     set_turn_failed(session, turn.id, "The message was deleted before the turn ran")
                 return
 
-            async with channel.typing():
-                transcript = await get_transcript(turn.transcript_key)
-                transcript_start_index = get_transcript_start_index(transcript)
-                channel_messages = await get_channel_context(
-                    channel, message, turn.last_seen_message_id, self.get_bot_user()
-                )
-                log_turn(
-                    channel_id,
-                    turn.id,
-                    f"Started turn for message {turn.message_id} with {len(transcript)}"
-                    f" transcript items and {len(channel_messages)} channel context messages",
-                )
-                if transcript_start_index > 0:
+            async with self.get_transcript_lock(channel_id):
+                async with channel.typing():
+                    transcript = await get_transcript(turn.transcript_key)
+                    transcript_start_index = get_transcript_start_index(transcript)
+                    channel_messages = await get_channel_context(
+                        channel, message, turn.last_seen_message_id, self.get_bot_user()
+                    )
                     log_turn(
                         channel_id,
                         turn.id,
-                        f"Trimmed {transcript_start_index} older transcript items from the model"
-                        " input",
+                        f"Started turn for message {turn.message_id} with {len(transcript)}"
+                        f" transcript items and {len(channel_messages)} channel context messages",
                     )
-                prompt = get_turn_input(
-                    channel_messages,
-                    turn.author_name,
-                    message.author.name,
-                    turn.author_id,
-                    turn.content,
-                )
-                log_turn(channel_id, turn.id, f"Prompt:\n{prompt}")
-                context = AgentContext(
-                    bot=self.bot,
-                    channel_id=channel_id,
-                    author_id=turn.author_id,
-                    author_name=turn.author_name,
-                )
-                result = await run_turn(transcript[transcript_start_index:], prompt, context)
-                log_run_items(channel_id, turn.id, result.new_items)
-                output = str(result.final_output or "")
-                if not output.strip():
-                    log_turn(
-                        channel_id, turn.id, "Agent returned an empty reply, using the fallback"
+                    if transcript_start_index > 0:
+                        log_turn(
+                            channel_id,
+                            turn.id,
+                            f"Trimmed {transcript_start_index} older transcript items from the model"
+                            " input",
+                        )
+                    prompt = get_turn_input(
+                        channel_messages,
+                        turn.author_name,
+                        message.author.name,
+                        turn.author_id,
+                        turn.content,
                     )
-                    output = AGENT_EMPTY_OUTPUT_MESSAGE
+                    log_turn(channel_id, turn.id, f"Prompt:\n{prompt}")
+                    context = AgentContext(
+                        bot=self.bot,
+                        channel_id=channel_id,
+                        author_id=turn.author_id,
+                        author_name=turn.author_name,
+                        message=message,
+                    )
+                    result = await run_turn(transcript[transcript_start_index:], prompt, context)
+                    log_run_items(channel_id, turn.id, result.new_items)
+                    output = str(result.final_output or "")
+                    if not output.strip():
+                        log_turn(
+                            channel_id, turn.id, "Agent returned an empty reply, using the fallback"
+                        )
+                        output = AGENT_EMPTY_OUTPUT_MESSAGE
 
-            response_messages = await send_reply(message, output)
-            replied = True
-            response_message_ids = [response.id for response in response_messages]
-            log_turn(channel_id, turn.id, f"Replied {response_message_ids}:\n{output}")
-            await set_transcript(
-                turn.transcript_key,
-                [*transcript[:transcript_start_index], *result.to_input_list()],
-            )
+                response_messages = await send_reply(message, output, context.views)
+                replied = True
+                response_message_ids = [response.id for response in response_messages]
+                log_turn(channel_id, turn.id, f"Replied {response_message_ids}:\n{output}")
+                if context.views:
+                    log_turn(
+                        channel_id, turn.id, f"Attached views: {get_views_text(context.views)}"
+                    )
+                await set_transcript(
+                    turn.transcript_key,
+                    [*transcript[:transcript_start_index], *result.to_input_list()],
+                )
             with Session() as session:
                 set_last_seen_message_id(session, turn.conversation_id, turn.message_id)
                 set_turn_completed(
@@ -340,7 +408,7 @@ class AgentWorker:
         try:
             await message.reply(
                 AGENT_TURN_FAILED_MESSAGE.format(mention=message.author.mention),
-                allowed_mentions=REPLY_ALLOWED_MENTIONS,
+                allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS,
             )
         except discord.HTTPException:
             _logger.exception(

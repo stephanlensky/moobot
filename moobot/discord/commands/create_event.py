@@ -31,15 +31,19 @@ async def create_event_cmd(bot: DiscordBot, interaction: Interaction) -> None:
 async def create_event_callback(
     bot: DiscordBot, interaction: Interaction, event: MoobloomEvent
 ) -> None:
+    event = await create_event(bot, event)
+    await interaction.response.send_message(
+        f"{bot.affirm()} {interaction.user.mention}, I added a new event"
+        f" {event.name} to the calendar.",
+        ephemeral=True,
+    )
+
+
+async def create_event(bot: DiscordBot, event: MoobloomEvent) -> MoobloomEvent:
     with Session(expire_on_commit=False) as session:
         _logger.info(f"Adding event {event.name}")
         session.add(event)
         session.commit()
 
     create_task(initialize_events(bot))
-
-    await interaction.response.send_message(
-        f"{bot.affirm()} {interaction.user.mention}, I added a new event"
-        f" {event.name} to the calendar.",
-        ephemeral=True,
-    )
+    return event

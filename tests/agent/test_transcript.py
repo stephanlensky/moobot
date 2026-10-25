@@ -1,6 +1,10 @@
 from agents import TResponseInputItem
 
-from moobot.agent.transcript import get_transcript_start_index, is_user_message
+from moobot.agent.transcript import (
+    get_transcript_start_index,
+    is_transcript_note,
+    is_user_message,
+)
 
 
 def _get_turn_items(index: int) -> list[TResponseInputItem]:
@@ -64,3 +68,22 @@ def test_get_transcript_start_index__keeps_tool_calls_with_outputs() -> None:
     ]
     assert call_ids == output_call_ids == ["call_1", "call_2", "call_3"]
     assert is_user_message(trimmed[0])
+
+
+def test_is_transcript_note__detects_only_notes() -> None:
+    assert is_transcript_note(
+        {"role": "user", "content": "[Event form update, not a message] Alice created the event"}
+    )
+    assert not is_transcript_note({"role": "user", "content": "question 0"})
+    assert not is_transcript_note(_get_turn_items(0)[4])
+
+
+def test_get_transcript_start_index__notes__do_not_count_as_turns() -> None:
+    note: TResponseInputItem = {
+        "role": "user",
+        "content": "[Event form update, not a message] Alice created the event",
+    }
+    transcript = [*_get_turn_items(0), note, *_get_turn_items(1), note, *_get_turn_items(2)]
+
+    assert get_transcript_start_index(transcript, turn_limit=3) == 0
+    assert get_transcript_start_index(transcript, turn_limit=2) == 6

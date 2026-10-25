@@ -278,7 +278,7 @@ async def start() -> None:
                 )
                 return
 
-            await update_event_cmd(discord_bot, session, interaction, db_event)
+            await update_event_cmd(discord_bot, interaction, db_event)
 
     @discord_bot.tree.command(  # type: ignore
         name="delete_event", description="Permanently delete an event from the Moobloom calendar."
@@ -299,7 +299,7 @@ async def start() -> None:
                 )
                 return
 
-            await delete_event_cmd(session, discord_bot, interaction, db_event)
+            await delete_event_cmd(discord_bot, interaction, db_event)
 
     @discord_bot.tree.command(  # type: ignore
         name="whos_going", description="Check who is currently RSVP'd to a given event."

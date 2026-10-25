@@ -2,7 +2,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call
 
 import discord
 import pytest
@@ -17,14 +17,18 @@ from openai.types.responses.response_reasoning_item import Summary
 from pytest_mock import MockerFixture
 from sqlalchemy.orm import Session, sessionmaker
 
+from moobot.agent.context import AgentContext
 from moobot.agent.worker import (
-    REPLY_ALLOWED_MENTIONS,
     AgentWorker,
     log_run_items,
     send_reply,
     split_message,
 )
-from moobot.constants import AGENT_EMPTY_OUTPUT_MESSAGE, AGENT_TRANSCRIPT_TURN_LIMIT
+from moobot.constants import (
+    AGENT_EMPTY_OUTPUT_MESSAGE,
+    AGENT_REPLY_ALLOWED_MENTIONS,
+    AGENT_TRANSCRIPT_TURN_LIMIT,
+)
 from moobot.db.crud.agent import (
     clear_active_conversation,
     create_turn,
@@ -245,8 +249,12 @@ def test_send_reply__long_text__replies_then_sends_follow_ups() -> None:
 
     response_messages = asyncio.run(send_reply(message, text))
 
-    message.reply.assert_awaited_once_with("a" * 2000, allowed_mentions=REPLY_ALLOWED_MENTIONS)
-    message.channel.send.assert_awaited_once_with("b" * 10, allowed_mentions=REPLY_ALLOWED_MENTIONS)
+    message.reply.assert_awaited_once_with(
+        "a" * 2000, allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS
+    )
+    message.channel.send.assert_awaited_once_with(
+        "b" * 10, allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS
+    )
     assert [response.id for response in response_messages] == [1001, 2001]
 
 
@@ -257,13 +265,14 @@ def test_worker__success__replies_and_completes_turn(
 
     asyncio.run(_queue_turns(mocks, message))
 
-    message.reply.assert_awaited_once_with("Moo!", allowed_mentions=REPLY_ALLOWED_MENTIONS)
+    message.reply.assert_awaited_once_with("Moo!", allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS)
     mocks.get_transcript.assert_awaited_once_with("conversations/1.json")
     transcript, prompt, context = mocks.run_turn.await_args_list[0].args
     assert transcript == TRANSCRIPT
     assert "what's up?" in prompt
     assert context.channel_id == CHANNEL_ID
     assert context.author_id == 42
+    assert context.message is message
     mocks.set_transcript.assert_awaited_once_with("conversations/1.json", NEW_TRANSCRIPT)
     mocks.channel.typing.assert_called_once()
 
@@ -288,7 +297,7 @@ def test_worker__empty_output__sends_fallback_and_completes_turn(
     asyncio.run(_queue_turns(mocks, message))
 
     message.reply.assert_awaited_once_with(
-        AGENT_EMPTY_OUTPUT_MESSAGE, allowed_mentions=REPLY_ALLOWED_MENTIONS
+        AGENT_EMPTY_OUTPUT_MESSAGE, allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS
     )
     mocks.set_transcript.assert_awaited_once_with("conversations/1.json", NEW_TRANSCRIPT)
     [turn] = _get_turns(test_db_session)
@@ -357,7 +366,7 @@ def test_worker__failure__marks_turn_failed_and_continues(
 
     failed_message.reply.assert_awaited_once_with(
         "Sorry <@42>! Something went wrong while I was working on that.",
-        allowed_mentions=REPLY_ALLOWED_MENTIONS,
+        allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS,
     )
     mocks.set_transcript.assert_awaited_once()
     failed_turn, turn = _get_turns(test_db_session)
@@ -391,7 +400,7 @@ def test_worker__failure_after_reply__sends_no_failure_reply(
 
     asyncio.run(_queue_turns(mocks, message))
 
-    message.reply.assert_awaited_once_with("Moo!", allowed_mentions=REPLY_ALLOWED_MENTIONS)
+    message.reply.assert_awaited_once_with("Moo!", allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS)
     [turn] = _get_turns(test_db_session)
     assert turn.status == AgentTurnStatus.FAILED
     assert turn.error is not None
@@ -471,3 +480,191 @@ def test_start_queued_workers__running_turn_on_cleared_conversation__cancels_it(
     assert turn.finished_at is not None
     assert CHANNEL_ID not in mocks.worker.tasks
     mocks.run_turn.assert_not_awaited()
+
+
+def _get_view(label: str) -> MagicMock:
+    view = MagicMock(label=label)
+    view.message = None
+    return view
+
+
+def test_send_reply__views__attaches_first_to_last_chunk_and_sends_extras() -> None:
+    message = _get_message(1, "hi")
+    first_view, second_view = _get_view("Create event: Hayride"), _get_view("Delete event: Corn")
+
+    response_messages = asyncio.run(
+        send_reply(message, "a" * 2000 + "b" * 10, [first_view, second_view])
+    )
+
+    message.reply.assert_awaited_once_with(
+        "a" * 2000, allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS
+    )
+    assert message.channel.send.await_args_list == [
+        call("b" * 10, allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS, view=first_view),
+        call("Delete event: Corn", allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS, view=second_view),
+    ]
+    assert first_view.message is response_messages[1]
+    assert second_view.message is response_messages[2]
+
+
+def test_send_reply__one_chunk_with_view__attaches_view_to_reply() -> None:
+    message = _get_message(1, "hi")
+    view = _get_view("Create event")
+
+    [response_message] = asyncio.run(send_reply(message, "moo", [view]))
+
+    message.reply.assert_awaited_once_with(
+        "moo", allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS, view=view
+    )
+    assert view.message is response_message
+
+
+def test_worker__tool_queues_view__attaches_it_and_logs_it(
+    test_db_session: sessionmaker[Session], mocks: Mocks, caplog: pytest.LogCaptureFixture
+) -> None:
+    view = _get_view("Delete event: Hayride")
+
+    async def run_turn(transcript: list, prompt: str, context: AgentContext) -> MagicMock:
+        context.views.append(view)
+        return _get_result("click it moo")
+
+    mocks.run_turn.side_effect = run_turn
+    message = _get_message(1, "delete the hayride")
+
+    with caplog.at_level(logging.INFO, logger="moobot.agent.worker"):
+        asyncio.run(_queue_turns(mocks, message))
+
+    message.reply.assert_awaited_once_with(
+        "click it moo", allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS, view=view
+    )
+    assert (
+        f"[channel {CHANNEL_ID}] [turn 1] Attached views: Delete event: Hayride (message 1001)"
+        in caplog.messages
+    )
+
+
+def test_worker__failure_after_tool_queues_view__sends_no_view(
+    test_db_session: sessionmaker[Session], mocks: Mocks
+) -> None:
+    async def run_turn(transcript: list, prompt: str, context: AgentContext) -> MagicMock:
+        context.views.append(_get_view("Create event"))
+        raise RuntimeError("model is down")
+
+    mocks.run_turn.side_effect = run_turn
+    message = _get_message(1, "hi")
+
+    asyncio.run(_queue_turns(mocks, message))
+
+    message.reply.assert_awaited_once_with(
+        "Sorry <@42>! Something went wrong while I was working on that.",
+        allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS,
+    )
+
+
+NOTE = '[Event form update, not a message] Alice (@alice, <@42>) created the event "Hayride" (id 1)'
+
+
+def _get_stored_transcripts(mocks: Mocks) -> dict[str, list]:
+    transcripts: dict[str, list] = {"conversations/1.json": list(TRANSCRIPT)}
+
+    async def get_transcript(key: str) -> list:
+        return list(transcripts.get(key, []))
+
+    async def set_transcript(key: str, items: list) -> None:
+        transcripts[key] = list(items)
+
+    mocks.get_transcript.side_effect = get_transcript
+    mocks.set_transcript.side_effect = set_transcript
+    return transcripts
+
+
+def test_add_transcript_note__active_conversation__appends_note_without_running_model(
+    test_db_session: sessionmaker[Session], mocks: Mocks, caplog: pytest.LogCaptureFixture
+) -> None:
+    transcripts = _get_stored_transcripts(mocks)
+    with test_db_session() as session:
+        get_or_create_active_conversation(session, CHANNEL_ID)
+
+    with caplog.at_level(logging.INFO, logger="moobot.agent.worker"):
+        asyncio.run(mocks.worker.add_transcript_note(CHANNEL_ID, NOTE))
+
+    assert transcripts["conversations/1.json"] == [*TRANSCRIPT, {"role": "user", "content": NOTE}]
+    mocks.run_turn.assert_not_awaited()
+    assert _get_turns(test_db_session) == []
+    assert f"[channel {CHANNEL_ID}] {NOTE}" in caplog.messages[-1]
+
+
+def test_add_transcript_note__cleared_conversation__uses_active_conversation(
+    test_db_session: sessionmaker[Session], mocks: Mocks
+) -> None:
+    transcripts = _get_stored_transcripts(mocks)
+    with test_db_session() as session:
+        get_or_create_active_conversation(session, CHANNEL_ID)
+        clear_active_conversation(session, CHANNEL_ID)
+        get_or_create_active_conversation(session, CHANNEL_ID)
+
+    asyncio.run(mocks.worker.add_transcript_note(CHANNEL_ID, NOTE))
+
+    assert transcripts["conversations/1.json"] == TRANSCRIPT
+    assert transcripts["conversations/2.json"] == [{"role": "user", "content": NOTE}]
+
+
+def test_add_transcript_note__no_active_conversation__does_nothing(
+    test_db_session: sessionmaker[Session], mocks: Mocks
+) -> None:
+    with test_db_session() as session:
+        get_or_create_active_conversation(session, CHANNEL_ID)
+        clear_active_conversation(session, CHANNEL_ID)
+
+    asyncio.run(mocks.worker.add_transcript_note(CHANNEL_ID, NOTE))
+
+    mocks.get_transcript.assert_not_awaited()
+    mocks.set_transcript.assert_not_awaited()
+
+
+def test_add_transcript_note__storage_fails__logs_without_raising(
+    test_db_session: sessionmaker[Session], mocks: Mocks, caplog: pytest.LogCaptureFixture
+) -> None:
+    mocks.set_transcript.side_effect = RuntimeError("s3 is down")
+    with test_db_session() as session:
+        get_or_create_active_conversation(session, CHANNEL_ID)
+
+    asyncio.run(mocks.worker.add_transcript_note(CHANNEL_ID, NOTE))
+
+    assert any("Failed to add transcript note" in message for message in caplog.messages)
+
+
+def test_add_transcript_note__during_turn__waits_for_turn_and_keeps_both(
+    test_db_session: sessionmaker[Session], mocks: Mocks
+) -> None:
+    transcripts = _get_stored_transcripts(mocks)
+    turn_started = asyncio.Event()
+    finish_turn = asyncio.Event()
+
+    async def run_turn(transcript: list, prompt: str, context: AgentContext) -> MagicMock:
+        turn_started.set()
+        await finish_turn.wait()
+        return _get_result("Moo!")
+
+    mocks.run_turn.side_effect = run_turn
+    message = _get_message(1, "hi")
+    mocks.messages[message.id] = message
+
+    async def run() -> None:
+        mocks.worker.queue_turn(message)
+        await turn_started.wait()
+        note_task = asyncio.create_task(mocks.worker.add_transcript_note(CHANNEL_ID, NOTE))
+        for _ in range(10):
+            await asyncio.sleep(0)
+        assert not note_task.done()
+        assert transcripts["conversations/1.json"] == TRANSCRIPT
+        finish_turn.set()
+        await mocks.worker.tasks[CHANNEL_ID]
+        await note_task
+
+    asyncio.run(run())
+
+    assert transcripts["conversations/1.json"] == [
+        *NEW_TRANSCRIPT,
+        {"role": "user", "content": NOTE},
+    ]

@@ -7,7 +7,7 @@ from moobot.discord.views.event_modal import (
     EventDescriptionAndURLs,
     EventTime,
     _parse_event_description,
-    _parse_event_time,
+    parse_event_time,
 )
 from moobot.util.time import today as local_today
 
@@ -104,10 +104,10 @@ SOME_MULTILINE_DESCRIPTION = "Some\nmultiline\ndescription"
         ),
     ],
 )
-def test__parse_event_time__various_time_strings__parses_correctly(
+def test_parse_event_time__various_time_strings__parses_correctly(
     frozen_now: datetime, time_str: str, expected: EventTime
 ) -> None:
-    assert _parse_event_time(time_str) == expected
+    assert parse_event_time(time_str) == expected
 
 
 @pytest.mark.parametrize(
@@ -254,18 +254,18 @@ def test__parse_event_description__various_descriptions__parses_correctly(
         ),
     ],
 )
-def test__parse_event_time__year_inference__does_not_shift_current_events(
+def test_parse_event_time__year_inference__does_not_shift_current_events(
     frozen_now: datetime, time_str: str, expected: EventTime
 ) -> None:
-    assert _parse_event_time(time_str) == expected
+    assert parse_event_time(time_str) == expected
 
 
-def test__parse_event_time__start_after_end__raises(frozen_now: datetime) -> None:
+def test_parse_event_time__start_after_end__raises(frozen_now: datetime) -> None:
     with pytest.raises(ValueError, match="is after end date"):
-        _parse_event_time("2026-06-20 to 2026-06-15")
+        parse_event_time("2026-06-20 to 2026-06-15")
 
 
-def test__parse_event_time__range_ending_on_weekday__uses_that_weekday() -> None:
+def test_parse_event_time__range_ending_on_weekday__uses_that_weekday() -> None:
     """
     A weekday name carries a date of its own, so it must not be collapsed onto the start date the
     way a bare time like "10PM" is. dateutil resolves it against the real current date, so this is
@@ -275,7 +275,7 @@ def test__parse_event_time__range_ending_on_weekday__uses_that_weekday() -> None
     # the coming Sunday, which is today when today is already a Sunday
     next_sunday = today + timedelta(days=(6 - today.weekday()) % 7)
 
-    parsed = _parse_event_time(f"{today.month}/{today.day} to Sunday")
+    parsed = parse_event_time(f"{today.month}/{today.day} to Sunday")
 
     assert parsed.start_date == today
     assert parsed.end_date == next_sunday
@@ -305,10 +305,10 @@ def timed(start: datetime, end: datetime) -> EventTime:
         ),
     ],
 )
-def test__parse_event_time__end_time_before_start_time__ends_next_day(
+def test_parse_event_time__end_time_before_start_time__ends_next_day(
     frozen_now: datetime, time_str: str, expected: EventTime
 ) -> None:
-    assert _parse_event_time(time_str) == expected
+    assert parse_event_time(time_str) == expected
 
 
 def all_day(start: date, end: date) -> EventTime:
@@ -334,49 +334,49 @@ JUNE_21 = date(2026, 6, 21)
         pytest.param("June 20 TO 21", id="uppercase to"),
     ],
 )
-def test__parse_event_time__range_separators__parse_as_range(
+def test_parse_event_time__range_separators__parse_as_range(
     frozen_now: datetime, time_str: str
 ) -> None:
-    assert _parse_event_time(time_str) == all_day(JUNE_20, JUNE_21)
+    assert parse_event_time(time_str) == all_day(JUNE_20, JUNE_21)
 
 
-def test__parse_event_time__hyphen_between_letters__parses_as_range(frozen_now: datetime) -> None:
-    assert _parse_event_time("June 20 7PM-10PM") == timed(
+def test_parse_event_time__hyphen_between_letters__parses_as_range(frozen_now: datetime) -> None:
+    assert parse_event_time("June 20 7PM-10PM") == timed(
         datetime(2026, 6, 20, 19),  # noqa: DTZ001
         datetime(2026, 6, 20, 22),  # noqa: DTZ001
     )
 
 
-def test__parse_event_time__iso_date__is_not_split(frozen_now: datetime) -> None:
-    assert _parse_event_time("2026-06-20") == all_day(JUNE_20, JUNE_20)
+def test_parse_event_time__iso_date__is_not_split(frozen_now: datetime) -> None:
+    assert parse_event_time("2026-06-20") == all_day(JUNE_20, JUNE_20)
 
 
-def test__parse_event_time__time_only_end__keeps_its_own_minutes(frozen_now: datetime) -> None:
-    assert _parse_event_time("6/20 7:30PM to 10PM") == timed(
+def test_parse_event_time__time_only_end__keeps_its_own_minutes(frozen_now: datetime) -> None:
+    assert parse_event_time("6/20 7:30PM to 10PM") == timed(
         datetime(2026, 6, 20, 19, 30),  # noqa: DTZ001
         datetime(2026, 6, 20, 22),  # noqa: DTZ001
     )
 
 
-def test__parse_event_time__bare_end_day__uses_start_month(frozen_now: datetime) -> None:
-    assert _parse_event_time("August 3 to 4") == all_day(date(2026, 8, 3), date(2026, 8, 4))
+def test_parse_event_time__bare_end_day__uses_start_month(frozen_now: datetime) -> None:
+    assert parse_event_time("August 3 to 4") == all_day(date(2026, 8, 3), date(2026, 8, 4))
 
 
-def test__parse_event_time__bare_end_day_before_start_day__ends_next_month(
+def test_parse_event_time__bare_end_day_before_start_day__ends_next_month(
     frozen_now: datetime,
 ) -> None:
-    assert _parse_event_time("June 30 to 2") == all_day(date(2026, 6, 30), date(2026, 7, 2))
+    assert parse_event_time("June 30 to 2") == all_day(date(2026, 6, 30), date(2026, 7, 2))
 
 
-def test__parse_event_time__abbreviated_year_in_the_future__is_accepted(
+def test_parse_event_time__abbreviated_year_in_the_future__is_accepted(
     frozen_now: datetime,
 ) -> None:
-    assert _parse_event_time("6/20/27") == all_day(date(2027, 6, 20), date(2027, 6, 20))
+    assert parse_event_time("6/20/27") == all_day(date(2027, 6, 20), date(2027, 6, 20))
 
 
 @pytest.mark.parametrize("time_str", ["June 20 21", "6/20/25"])
-def test__parse_event_time__abbreviated_year_in_the_past__raises(
+def test_parse_event_time__abbreviated_year_in_the_past__raises(
     frozen_now: datetime, time_str: str
 ) -> None:
     with pytest.raises(ValueError, match="which has already passed"):
-        _parse_event_time(time_str)
+        parse_event_time(time_str)

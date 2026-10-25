@@ -42,3 +42,10 @@ def test_get_turn_input__channel_messages__includes_context_before_message() -> 
         "The message to reply to, from Alice (@alice, <@123>):\n"
         "<message>\nwhen is the hayride?\n</message>"
     )
+
+
+def test_get_instructions__explains_transcript_notes() -> None:
+    instructions = get_instructions()
+
+    assert 'a user item starting with "[Event form update, not a message]"' in instructions
+    assert "authoritative record" in instructions

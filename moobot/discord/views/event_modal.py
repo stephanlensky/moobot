@@ -102,7 +102,7 @@ def _roll_end_past_start(start: TimeAwareParserResult, end: TimeAwareParserResul
     return end.dt
 
 
-def _parse_event_time(raw_time: str) -> EventTime:
+def parse_event_time(raw_time: str) -> EventTime:
     time_parts = _split_event_time(raw_time)
     if len(time_parts) > 2:
         raise ValueError("Could not parse event time: too many parts")
@@ -244,7 +244,7 @@ class CreateEventModal(Modal):
                 child.default = event.name
             elif child == self.channel_name and event.channel_name:
                 child.default = event.channel_name
-            elif child == self.time:
+            elif child == self.time and event.start_date:
                 child.default = format_event_duration_for_event_modal(event)
             elif child == self.location and event.location:
                 child.default = event.location
@@ -258,7 +258,7 @@ class CreateEventModal(Modal):
         description = self.description.value or None
 
         try:
-            time = _parse_event_time(self.time.value)
+            time = parse_event_time(self.time.value)
         except ValueError as e:
             await interaction.response.send_message(
                 f"Sorry {interaction.user.mention}, I didn't understand the time duration you"
