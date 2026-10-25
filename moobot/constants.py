@@ -21,6 +21,8 @@ GOOGLE_CALENDAR_SYNC_TOKEN_NOT_AUTHORIZED = (
 DISCORD_MESSAGE_LENGTH_LIMIT = 2000
 AGENT_CONTEXT_MESSAGE_LIMIT = 15
 AGENT_CONTEXT_MAX_AGE = timedelta(hours=24)
+AGENT_TRANSCRIPT_TURN_LIMIT = 30
 AGENT_TURN_FAILED_MESSAGE = "Sorry {mention}! Something went wrong while I was working on that."
+AGENT_EMPTY_OUTPUT_MESSAGE = "moo?? i forgot what i was gonna say"
 AGENT_CONVERSATION_CLEARED_MESSAGE = "Okay, I've cleared our conversation in this channel."
 AGENT_NO_CONVERSATION_MESSAGE = "There's no conversation to clear in this channel."

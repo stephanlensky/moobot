@@ -1,9 +1,11 @@
 from collections.abc import Generator
 
 import pytest
+from sqlalchemy import func
 from sqlalchemy.orm import Session, sessionmaker
 
 from moobot.db.crud.agent import (
+    cancel_cleared_running_turns,
     clear_active_conversation,
     create_turn,
     get_active_conversation,
@@ -85,7 +87,9 @@ def test_clear_active_conversation__queued_turns__cancels_only_queued_turns(
     assert cleared.cleared_at is not None
     assert get_active_conversation(session, CHANNEL_ID) is None
     assert session.get_one(AgentTurn, running.id).status == AgentTurnStatus.RUNNING
+    assert session.get_one(AgentTurn, running.id).finished_at is None
     assert session.get_one(AgentTurn, queued.id).status == AgentTurnStatus.CANCELLED
+    assert session.get_one(AgentTurn, queued.id).finished_at is not None
 
 
 def test_clear_active_conversation__no_conversation__returns_none(session: Session) -> None:
@@ -183,6 +187,45 @@ def test_reset_running_turns__running_turns__sets_them_queued(session: Session) 
     assert completed.status == AgentTurnStatus.COMPLETED
 
 
+def test_reset_running_turns__cleared_conversation__leaves_its_running_turns(
+    session: Session,
+) -> None:
+    cleared_conversation = get_or_create_active_conversation(session, CHANNEL_ID)
+    cleared_running = _create_turn(session, cleared_conversation.id, message_id=1)
+    set_turn_running(session, cleared_running.id)
+    clear_active_conversation(session, CHANNEL_ID)
+    conversation = get_or_create_active_conversation(session, CHANNEL_ID)
+    running = _create_turn(session, conversation.id, message_id=2)
+    set_turn_running(session, running.id)
+
+    assert reset_running_turns(session) == 1
+
+    assert running.status == AgentTurnStatus.QUEUED
+    assert cleared_running.status == AgentTurnStatus.RUNNING
+
+
+def test_cancel_cleared_running_turns__cancels_only_running_turns_on_cleared_conversations(
+    session: Session,
+) -> None:
+    cleared_conversation = get_or_create_active_conversation(session, CHANNEL_ID)
+    cleared_running = _create_turn(session, cleared_conversation.id, message_id=1)
+    cleared_completed = _create_turn(session, cleared_conversation.id, message_id=2)
+    set_turn_running(session, cleared_running.id)
+    set_turn_running(session, cleared_completed.id)
+    set_turn_completed(session, cleared_completed.id, prompt="", output="", response_message_id=3)
+    clear_active_conversation(session, CHANNEL_ID)
+    conversation = get_or_create_active_conversation(session, CHANNEL_ID)
+    running = _create_turn(session, conversation.id, message_id=4)
+    set_turn_running(session, running.id)
+
+    assert cancel_cleared_running_turns(session) == 1
+
+    assert cleared_running.status == AgentTurnStatus.CANCELLED
+    assert cleared_running.finished_at is not None
+    assert cleared_completed.status == AgentTurnStatus.COMPLETED
+    assert running.status == AgentTurnStatus.RUNNING
+
+
 def test_get_channel_ids_with_queued_turns__returns_channels_with_queued_turns(
     session: Session,
 ) -> None:
@@ -209,3 +252,17 @@ def test_get_turn_count__counts_turns_with_status(session: Session) -> None:
     assert get_turn_count(session, conversation.id, AgentTurnStatus.QUEUED) == 2
     assert get_turn_count(session, conversation.id, AgentTurnStatus.RUNNING) == 1
     assert get_turn_count(session, conversation.id, AgentTurnStatus.FAILED) == 0
+
+
+def test_get_channel_ids_with_queued_turns__cleared_conversation__is_excluded(
+    session: Session,
+) -> None:
+    conversation = get_or_create_active_conversation(session, CHANNEL_ID)
+    turn = _create_turn(session, conversation.id, message_id=1)
+    session.query(AgentConversation).filter(AgentConversation.id == conversation.id).update(
+        {AgentConversation.cleared_at: func.now()}
+    )
+    session.commit()
+
+    assert turn.status == AgentTurnStatus.QUEUED
+    assert get_channel_ids_with_queued_turns(session) == []

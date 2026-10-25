@@ -24,8 +24,15 @@ from moobot.agent.worker import (
     send_reply,
     split_message,
 )
-from moobot.db.crud.agent import create_turn, get_or_create_active_conversation, set_turn_running
+from moobot.constants import AGENT_EMPTY_OUTPUT_MESSAGE, AGENT_TRANSCRIPT_TURN_LIMIT
+from moobot.db.crud.agent import (
+    clear_active_conversation,
+    create_turn,
+    get_or_create_active_conversation,
+    set_turn_running,
+)
 from moobot.db.models import AgentConversation, AgentTurn, AgentTurnStatus
+from tests.agent.test_transcript import _get_transcript, _get_turn_items
 
 CHANNEL_ID = 1234
 BOT_USER = MagicMock(id=999, display_name="Moobot")
@@ -62,7 +69,7 @@ def _get_message(message_id: int, content: str) -> MagicMock:
     return message
 
 
-def _get_result(final_output: str) -> MagicMock:
+def _get_result(final_output: str | None) -> MagicMock:
     result = MagicMock(final_output=final_output)
     result.to_input_list.return_value = NEW_TRANSCRIPT
     return result
@@ -167,6 +174,71 @@ def test_split_message__long_text__splits_on_newlines_then_hard_limit() -> None:
     assert split_message(text, limit=8) == ["aaaaaa", "bbbbbbbb", "bbbb"]
 
 
+def test_split_message__no_trailing_empty_chunk() -> None:
+    assert split_message("a" * 8 + "\n\n", limit=8) == ["a" * 8]
+
+
+def test_split_message__inside_code_block__closes_and_reopens_fence() -> None:
+    text = "here:\n```py\n" + "\n".join(f"line{index}" for index in range(10)) + "\n```\ndone"
+
+    chunks = split_message(text, limit=30)
+
+    assert all(len(chunk) <= 30 for chunk in chunks)
+    assert chunks[0].startswith("here:\n```py\n")
+    for chunk in chunks[:-1]:
+        assert chunk.endswith("\n```")
+    for chunk in chunks[1:]:
+        assert chunk.startswith("```py\n")
+    assert all(chunk.count("```") % 2 == 0 for chunk in chunks)
+    joined_lines = [
+        line for chunk in chunks for line in chunk.split("\n") if not line.startswith("```")
+    ]
+    assert joined_lines == ["here:", *(f"line{index}" for index in range(10)), "done"]
+
+
+def test_split_message__code_block_without_language__reopens_plain_fence() -> None:
+    text = "```\n" + "a" * 20 + "\n" + "b" * 20 + "\n```"
+
+    assert split_message(text, limit=30) == [
+        "```\n" + "a" * 20 + "\n```",
+        "```\n" + "b" * 20 + "\n```",
+    ]
+
+
+def test_split_message__long_line_in_code_block__hard_splits_within_limit() -> None:
+    text = "```\n" + "a" * 50 + "\n```"
+
+    chunks = split_message(text, limit=20)
+
+    assert all(len(chunk) <= 20 for chunk in chunks)
+    assert all(chunk.startswith("```\n") and chunk.endswith("\n```") for chunk in chunks)
+    assert "".join(chunk.removeprefix("```\n").removesuffix("\n```") for chunk in chunks) == (
+        "a" * 50
+    )
+
+
+def test_split_message__split_after_opening_fence__moves_fence_to_next_chunk() -> None:
+    text = "intro\n```py\n" + "a" * 20
+
+    assert split_message(text, limit=20) == [
+        "intro",
+        "```py\n" + "a" * 10 + "\n```",
+        "```py\n" + "a" * 10,
+    ]
+
+
+def test_split_message__closed_code_block__splits_normally() -> None:
+    text = "```\ncode\n```\n" + "b" * 10
+
+    assert split_message(text, limit=14) == ["```\ncode\n```", "b" * 10]
+
+
+def test_split_message__inline_code_fence__does_not_open_block() -> None:
+    text = "use ```x``` ok\n" + "b" * 10
+
+    assert split_message(text, limit=14) == ["use ```x``` ok", "b" * 10]
+
+
 def test_send_reply__long_text__replies_then_sends_follow_ups() -> None:
     message = _get_message(1, "hi")
     text = "a" * 2000 + "b" * 10
@@ -204,6 +276,54 @@ def test_worker__success__replies_and_completes_turn(
     assert turn.started_at is not None
     assert turn.finished_at is not None
     assert _get_conversation(test_db_session).last_seen_message_id == "1"
+
+
+@pytest.mark.parametrize("final_output", ["", "  \n", None])
+def test_worker__empty_output__sends_fallback_and_completes_turn(
+    test_db_session: sessionmaker[Session], mocks: Mocks, final_output: str | None
+) -> None:
+    mocks.run_turn.return_value = _get_result(final_output)
+    message = _get_message(1, "hi")
+
+    asyncio.run(_queue_turns(mocks, message))
+
+    message.reply.assert_awaited_once_with(
+        AGENT_EMPTY_OUTPUT_MESSAGE, allowed_mentions=REPLY_ALLOWED_MENTIONS
+    )
+    mocks.set_transcript.assert_awaited_once_with("conversations/1.json", NEW_TRANSCRIPT)
+    [turn] = _get_turns(test_db_session)
+    assert turn.status == AgentTurnStatus.COMPLETED
+    assert turn.output == AGENT_EMPTY_OUTPUT_MESSAGE
+
+
+def test_worker__long_transcript__trims_model_input_and_saves_full_transcript(
+    test_db_session: sessionmaker[Session], mocks: Mocks
+) -> None:
+    transcript = _get_transcript(AGENT_TRANSCRIPT_TURN_LIMIT + 2)
+    dropped_items, kept_items = transcript[:10], transcript[10:]
+    new_items = [{"role": "user", "content": "new"}, *_get_turn_items(99)[1:]]
+    mocks.get_transcript.return_value = transcript
+    mocks.run_turn.return_value.to_input_list.return_value = [*kept_items, *new_items]
+
+    asyncio.run(_queue_turns(mocks, _get_message(1, "hi")))
+
+    model_transcript = mocks.run_turn.await_args_list[0].args[0]
+    assert model_transcript == kept_items
+    assert model_transcript[0] == {"role": "user", "content": "question 2"}
+    mocks.set_transcript.assert_awaited_once_with(
+        "conversations/1.json", [*dropped_items, *kept_items, *new_items]
+    )
+
+
+def test_worker__short_transcript__sends_full_transcript(
+    test_db_session: sessionmaker[Session], mocks: Mocks
+) -> None:
+    transcript = _get_transcript(AGENT_TRANSCRIPT_TURN_LIMIT)
+    mocks.get_transcript.return_value = transcript
+
+    asyncio.run(_queue_turns(mocks, _get_message(1, "hi")))
+
+    assert mocks.run_turn.await_args_list[0].args[0] == transcript
 
 
 def test_worker__multiple_turns__runs_them_in_order(
@@ -263,6 +383,21 @@ def test_worker__failure__saves_no_transcript(
     assert _get_conversation(test_db_session).last_seen_message_id is None
 
 
+def test_worker__failure_after_reply__sends_no_failure_reply(
+    test_db_session: sessionmaker[Session], mocks: Mocks
+) -> None:
+    mocks.set_transcript.side_effect = RuntimeError("s3 is down")
+    message = _get_message(1, "hi")
+
+    asyncio.run(_queue_turns(mocks, message))
+
+    message.reply.assert_awaited_once_with("Moo!", allowed_mentions=REPLY_ALLOWED_MENTIONS)
+    [turn] = _get_turns(test_db_session)
+    assert turn.status == AgentTurnStatus.FAILED
+    assert turn.error is not None
+    assert "s3 is down" in turn.error
+
+
 def test_worker__deleted_message__marks_turn_failed(
     test_db_session: sessionmaker[Session], mocks: Mocks
 ) -> None:
@@ -315,3 +450,24 @@ def test_start_queued_workers__resets_running_turns_only_once(
     mocks.worker.start_queued_workers()
 
     assert [turn.status for turn in _get_turns(test_db_session)] == [AgentTurnStatus.RUNNING]
+
+
+def test_start_queued_workers__running_turn_on_cleared_conversation__cancels_it(
+    test_db_session: sessionmaker[Session], mocks: Mocks
+) -> None:
+    message = _get_message(1, "hi")
+    mocks.messages[message.id] = message
+    with test_db_session() as session:
+        conversation = get_or_create_active_conversation(session, CHANNEL_ID)
+        turn_id = create_turn(session, conversation.id, message.id, 42, "Alice", "hi").id
+        set_turn_running(session, turn_id)
+        clear_active_conversation(session, CHANNEL_ID)
+        get_or_create_active_conversation(session, CHANNEL_ID)
+
+    mocks.worker.start_queued_workers()
+
+    [turn] = _get_turns(test_db_session)
+    assert turn.status == AgentTurnStatus.CANCELLED
+    assert turn.finished_at is not None
+    assert CHANNEL_ID not in mocks.worker.tasks
+    mocks.run_turn.assert_not_awaited()

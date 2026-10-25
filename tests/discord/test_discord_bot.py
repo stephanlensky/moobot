@@ -3,6 +3,8 @@ import re
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from pytest_mock import MockerFixture
 
 from moobot.discord.discord_bot import DiscordBot
@@ -83,3 +85,34 @@ def test_on_message__routes_to_command_or_agent(
 
     assert command_handler.await_count == int(is_command)
     assert bot.agent_worker.queue_turn.call_count == int(is_agent)  # type: ignore[attr-defined]
+
+
+def test_on_ready__called_again__registers_each_scheduler_job_once(mocker: MockerFixture) -> None:
+    mocker.patch("moobot.discord.discord_bot.app_commands.CommandTree")
+    threadpool_scheduler = BackgroundScheduler()
+    mocker.patch(
+        "moobot.discord.discord_bot.get_threadpool_scheduler", return_value=threadpool_scheduler
+    )
+
+    async def get_job_ids_after_two_on_ready_calls() -> tuple[list[str], list[str]]:
+        scheduler = AsyncIOScheduler()
+        mocker.patch("moobot.discord.discord_bot.get_async_scheduler", return_value=scheduler)
+        scheduler.start(paused=True)
+        threadpool_scheduler.start(paused=True)
+        try:
+            bot = DiscordBot(MagicMock(user=BOT_USER, guilds=[]))
+            bot.agent_worker = MagicMock()
+            await bot.on_ready()
+            await bot.on_ready()
+            return (
+                [job.id for job in scheduler.get_jobs()],
+                [job.id for job in threadpool_scheduler.get_jobs()],
+            )
+        finally:
+            scheduler.shutdown(wait=False)
+            threadpool_scheduler.shutdown(wait=False)
+
+    assert asyncio.run(get_job_ids_after_two_on_ready_calls()) == (
+        ["initialize_events"],
+        ["complete_unfinished_google_calendar_setups"],
+    )

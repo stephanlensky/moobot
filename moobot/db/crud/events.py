@@ -8,7 +8,7 @@ def get_event_by_id(
 ) -> MoobloomEvent | None:
     query = session.query(MoobloomEvent).filter(MoobloomEvent.id == id)
     if not include_deleted:
-        query.filter(MoobloomEvent.deleted == False)
+        query = query.filter(MoobloomEvent.deleted == False)
 
     return query.one_or_none()
 
@@ -18,6 +18,6 @@ def get_event_by_name(
 ) -> MoobloomEvent | None:
     query = session.query(MoobloomEvent).filter(MoobloomEvent.name == name)
     if not include_deleted:
-        query.filter(MoobloomEvent.deleted == False)
+        query = query.filter(MoobloomEvent.deleted == False)
 
     return query.first()

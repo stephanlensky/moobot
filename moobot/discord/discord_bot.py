@@ -74,12 +74,16 @@ class DiscordBot:
         self.agent_worker.start_queued_workers()
         self.scheduler.add_job(
             initialize_events,
+            id="initialize_events",
+            replace_existing=True,
             args=(self,),
             trigger=IntervalTrigger(seconds=60 * 5),
             next_run_time=local_now(),
         )
         self.threadpool_scheduler.add_job(
             complete_unfinished_google_calendar_setups,
+            id="complete_unfinished_google_calendar_setups",
+            replace_existing=True,
             args=(self,),
             trigger=IntervalTrigger(seconds=10),
             next_run_time=local_now(),

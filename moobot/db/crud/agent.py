@@ -1,4 +1,4 @@
-from sqlalchemy import func
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from moobot.db.models import AgentConversation, AgentTurn, AgentTurnStatus
@@ -42,7 +42,7 @@ def clear_active_conversation(
     session.query(AgentTurn).filter(
         AgentTurn.conversation_id == conversation.id,
         AgentTurn.status == AgentTurnStatus.QUEUED,
-    ).update({AgentTurn.status: AgentTurnStatus.CANCELLED})
+    ).update({AgentTurn.status: AgentTurnStatus.CANCELLED, AgentTurn.finished_at: func.now()})
     if commit:
         session.commit()
     return conversation
@@ -130,11 +130,32 @@ def set_turn_failed(
         session.commit()
 
 
+def get_active_conversation_ids() -> Select[tuple[int]]:
+    return select(AgentConversation.id).where(AgentConversation.cleared_at == None)
+
+
 def reset_running_turns(session: Session, commit: bool = True) -> int:
     count = (
         session.query(AgentTurn)
-        .filter(AgentTurn.status == AgentTurnStatus.RUNNING)
+        .filter(
+            AgentTurn.status == AgentTurnStatus.RUNNING,
+            AgentTurn.conversation_id.in_(get_active_conversation_ids()),
+        )
         .update({AgentTurn.status: AgentTurnStatus.QUEUED, AgentTurn.started_at: None})
+    )
+    if commit:
+        session.commit()
+    return count
+
+
+def cancel_cleared_running_turns(session: Session, commit: bool = True) -> int:
+    count = (
+        session.query(AgentTurn)
+        .filter(
+            AgentTurn.status == AgentTurnStatus.RUNNING,
+            AgentTurn.conversation_id.not_in(get_active_conversation_ids()),
+        )
+        .update({AgentTurn.status: AgentTurnStatus.CANCELLED, AgentTurn.finished_at: func.now()})
     )
     if commit:
         session.commit()
@@ -145,7 +166,10 @@ def get_channel_ids_with_queued_turns(session: Session) -> list[int]:
     rows = (
         session.query(AgentConversation.channel_id)
         .join(AgentTurn)
-        .filter(AgentTurn.status == AgentTurnStatus.QUEUED)
+        .filter(
+            AgentTurn.status == AgentTurnStatus.QUEUED,
+            AgentConversation.cleared_at == None,
+        )
         .distinct()
         .all()
     )
