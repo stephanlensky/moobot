@@ -3,10 +3,13 @@ from sqlalchemy.orm import Session
 from moobot.db.models import GoogleApiAuthSession, GoogleApiUser
 
 
-def create_auth_session(session: Session, state: str, user_id: int, commit: bool = True) -> None:
+def create_auth_session(
+    session: Session, state: str, code_verifier: str, user_id: int, commit: bool = True
+) -> None:
     session.add(
         GoogleApiAuthSession(
             state=state,
+            code_verifier=code_verifier,
             user_id=str(user_id),
         )
     )

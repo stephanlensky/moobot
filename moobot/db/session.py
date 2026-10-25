@@ -1,12 +1,9 @@
-import time
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
-from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session as SessionCls
 from sqlalchemy.orm import sessionmaker
 
-from moobot.db.models import Base
 from moobot.settings import get_settings
 
 settings = get_settings()
@@ -17,20 +14,6 @@ connection_string = f"postgresql+psycopg://{credentials}@{host}"
 
 engine = create_engine(connection_string, future=True)
 Session = sessionmaker(engine)
-
-
-try:
-    Base.metadata.create_all(engine)
-except OperationalError:
-    print("Waiting for database to be ready...")
-    retries = 0
-    while retries < 3:
-        try:
-            Base.metadata.create_all(engine)
-            break
-        except OperationalError:
-            time.sleep(1)
-            retries += 1
 
 
 def get_session() -> Generator[SessionCls]:

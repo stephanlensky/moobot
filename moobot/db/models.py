@@ -109,6 +109,7 @@ class GoogleApiAuthSession(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     state: Mapped[str] = mapped_column(unique=True)
+    code_verifier: Mapped[str]
     user_id: Mapped[str] = mapped_column()
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())

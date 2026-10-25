@@ -6,8 +6,7 @@ if [ "$1" = "dev" ]; then
     run="dev"
 fi
 
-# wait for database to be ready
-python -c "import moobot.db.session"
+python -m moobot.db check || exit 1
 
 python -m moobot.main &
 bot_pid=$!

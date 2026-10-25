@@ -39,8 +39,10 @@ CLIENT_CONFIG = {
 SCOPES = ["https://www.googleapis.com/auth/calendar.app.created"]
 
 
-def _get_flow(state: str | None = None) -> google_auth_oauthlib.flow.Flow:
-    flow = google_auth_oauthlib.flow.Flow.from_client_config(CLIENT_CONFIG, SCOPES, state=state)
+def _get_flow(code_verifier: str | None = None) -> google_auth_oauthlib.flow.Flow:
+    flow = google_auth_oauthlib.flow.Flow.from_client_config(
+        CLIENT_CONFIG, SCOPES, code_verifier=code_verifier
+    )
     flow.redirect_uri = f"{settings.google_redirect_uri_host}/google_oauth/auth"
 
     return flow
@@ -57,13 +59,13 @@ def get_google_auth_url(user_id: int) -> str:
         include_granted_scopes="true",
     )
     with Session() as session:
-        create_auth_session(session, state, user_id)
+        create_auth_session(session, state, flow.code_verifier, user_id)
 
     return authorization_url
 
 
-def fetch_credentials(code: str) -> Credentials:
-    flow = _get_flow()
+def fetch_credentials(code: str, code_verifier: str) -> Credentials:
+    flow = _get_flow(code_verifier)
     flow.fetch_token(code=code)
 
     return flow.credentials

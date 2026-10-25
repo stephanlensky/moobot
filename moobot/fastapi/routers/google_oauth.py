@@ -37,9 +37,10 @@ def handle_oauth_response(
         )
 
     user_id = int(auth_session.user_id)
+    code_verifier = auth_session.code_verifier
     session.delete(auth_session)
 
-    credentials = fetch_credentials(code)
+    credentials = fetch_credentials(code, code_verifier)
     create_api_user(
         session,
         user_id=user_id,
