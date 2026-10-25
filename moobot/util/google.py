@@ -84,6 +84,16 @@ def get_calendar_service(user: GoogleApiUser) -> CalendarResource:
     return service
 
 
+def calendar_exists(service: CalendarResource, calendar_id: str) -> bool:
+    try:
+        service.calendars().get(calendarId=calendar_id).execute()
+    except HttpError as e:
+        if e.status_code not in (403, 404):
+            raise
+        return False
+    return True
+
+
 def create_moobloom_events_calendar(service: CalendarResource) -> str:
     calendar: Calendar = {"summary": settings.google_calendar_sync_calendar_name}
     created_calendar = service.calendars().insert(body=calendar).execute()
