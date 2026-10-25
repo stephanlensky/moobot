@@ -409,7 +409,8 @@ async def add_calendar_reaction_handler(bot: DiscordBot) -> None:
                     await user.send(
                         GOOGLE_CALENDAR_SYNC_ENABLE_DM_TEMPLATE.format(
                             auth_url=get_google_auth_url(user.id)
-                        )
+                        ),
+                        suppress_embeds=True,
                     )
                 else:
                     await user.send(GOOGLE_CALENDAR_SYNC_ENABLE_USER_EXISTS_DM)

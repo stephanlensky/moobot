@@ -1,7 +1,7 @@
 GOOGLE_CALENDAR_SYNC_ENABLE_DM_TEMPLATE = (
-    "**Mooooo!** :cow:\n\nTo finish setting up Google Calendar sync, authorize"
-    " access to your Google account by clicking the following link:\n{auth_url}\n\nAfter"
-    " authorizing access, your RSVPs to will be automatically synced to your Google Calendar."
+    "**Mooooo!** :cow:\n\nTo finish setting up Google Calendar sync,"
+    " [authorize access to your Google account]({auth_url}).\n\nAfter authorizing access, your"
+    " RSVPs will be automatically synced to your Google Calendar."
 )
 GOOGLE_CALENDAR_SYNC_ENABLE_USER_EXISTS_DM = (
     "Hm... you added a reaction to enable Google Calendar syncing, but sync was already enabled! I"
