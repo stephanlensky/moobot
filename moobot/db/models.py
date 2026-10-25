@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, ForeignKey, func
+from sqlalchemy import DateTime, ForeignKey, Index, func, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 
 from moobot.settings import get_settings
@@ -139,3 +139,62 @@ class GoogleCalendar(Base):
     calendar_id: Mapped[str]
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+class AgentConversation(Base):
+    __tablename__ = "agentconversation"
+    # one active (not cleared) conversation per channel
+    __table_args__ = (
+        Index(
+            "agentconversation_channel_id_active_key",
+            "channel_id",
+            unique=True,
+            postgresql_where=text("cleared_at IS NULL"),
+            sqlite_where=text("cleared_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    channel_id: Mapped[str]
+    transcript_key: Mapped[str]
+    last_seen_message_id: Mapped[str | None]
+    cleared_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+
+    turns: Mapped[list[AgentTurn]] = relationship(
+        back_populates="conversation", order_by="AgentTurn.id"
+    )
+
+
+class AgentTurnStatus(str, Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class AgentTurn(Base):
+    __tablename__ = "agentturn"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    conversation_id: Mapped[int] = mapped_column(ForeignKey("agentconversation.id"))
+    status: Mapped[str] = mapped_column(default=AgentTurnStatus.QUEUED)
+
+    message_id: Mapped[str] = mapped_column(unique=True)
+    author_id: Mapped[str]
+    author_name: Mapped[str]
+    content: Mapped[str]
+
+    prompt: Mapped[str | None]
+    output: Mapped[str | None]
+    error: Mapped[str | None]
+    response_message_id: Mapped[str | None]
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    started_at: Mapped[datetime | None] = mapped_column(DateTime)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+    conversation: Mapped[AgentConversation] = relationship(back_populates="turns")

@@ -46,6 +46,17 @@ class Settings(BaseSettings):
     google_client_secret: str
     google_redirect_uri_host: str
 
+    # conversational agent
+    litellm_base_url: str = "http://litellm.litellm.svc.cluster.local/v1"
+    litellm_api_key: str | None = None
+    agent_model: str = "openrouter/z-ai/glm-5.3-flash"
+
+    # s3 storage for agent transcripts
+    s3_endpoint_url: str = "http://seaweedfs.seaweedfs.svc.cluster.local:8333"
+    s3_access_key_id: str | None = None
+    s3_secret_access_key: str | None = None
+    s3_bucket: str = "moobot"
+
 
 def get_settings() -> Settings:
     return Settings()  # type: ignore

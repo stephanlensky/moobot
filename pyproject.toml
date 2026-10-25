@@ -19,14 +19,18 @@ dependencies = [
     "sqlalchemy>=2.0.54",
     "discord-py>=2.7.1",
     "alembic>=1.20.1",
+    "openai-agents>=0.24.0",
+    "boto3>=1.43.118",
 ]
 
 [dependency-groups]
 dev = [
+    "boto3-stubs[s3]>=1.43.118",
     "google-api-python-client-stubs>=1.40.0",
     "mypy>=2.3.1",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
+    "pytest-env>=1.8.1",
     "pytest-mock>=3.15.1",
     "ruff>=0.16.8",
     "types-python-dateutil>=2.9.0.20260807",
@@ -59,3 +63,21 @@ module = [
     "googleapiclient.*",
 ]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+env = [
+    "TZ=America/New_York",
+    "POSTGRES_USER=test",
+    "POSTGRES_PASSWORD=test",
+    "DISCORD_TOKEN=test",
+    "CALENDAR_CHANNEL_ID=1",
+    "EVENT_ANNOUNCE_CHANNEL_ID=1",
+    "GET_ALL_EVENT_CHANNELS_REACT_EMOJI_NAME=test",
+    "GOOGLE_CALENDAR_SYNC_REACT_EMOJI_NAME=test",
+    "ALL_EVENTS_ROLE_NAME=test",
+    "ACTIVE_EVENTS_CATEGORY_NAME=test",
+    "GOOGLE_CLIENT_ID=test",
+    "GOOGLE_PROJECT_ID=test",
+    "GOOGLE_CLIENT_SECRET=test",
+    "GOOGLE_REDIRECT_URI_HOST=test",
+]
