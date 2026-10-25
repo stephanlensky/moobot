@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-import asyncio
 import logging
 import random
-import re
-import traceback
 from collections.abc import Callable, Coroutine
 from enum import Enum
-from re import Pattern
 from typing import Any
 
 import discord
@@ -23,7 +19,7 @@ from discord import (
     app_commands,
 )
 
-from moobot.agent.history import get_bot_mention_regex, is_bot_mentioned
+from moobot.agent.history import is_bot_mentioned
 from moobot.agent.worker import AgentWorker
 from moobot.calendar_sync import complete_unfinished_google_calendar_setups
 from moobot.db.session import Session
@@ -41,11 +37,7 @@ from moobot.util.time import now as local_now
 settings = get_settings()
 _logger = logging.getLogger(__name__)
 
-_discord_bot_commands: dict[Pattern, Callable] = {}
-
 AFFIRMATIONS = ["Okay", "Sure", "Sounds good", "No problem", "Roger that", "Got it"]
-THANKS = [*AFFIRMATIONS, "Thanks", "Thank you"]
-DEBUG_COMMAND_PREFIX = r"(d|debug) "
 
 
 class ReactionAction(str, Enum):
@@ -57,14 +49,9 @@ ReactionHandler = Callable[[ReactionAction, PartialEmoji, User | Member], Corout
 
 
 class DiscordBot:
-    def __init__(
-        self,
-        client: discord.Client,
-        command_prefix: str | None = "$",
-    ) -> None:
+    def __init__(self, client: discord.Client) -> None:
         self.client = client
         self.tree = app_commands.CommandTree(client)
-        self.command_prefix = command_prefix
         self.scheduler = get_async_scheduler()
         self.threadpool_scheduler = get_threadpool_scheduler()
 
@@ -94,65 +81,12 @@ class DiscordBot:
             self.tree.copy_global_to(guild=guild)  # type: ignore
             await self.tree.sync(guild=guild)  # type: ignore
 
-    def is_bot_mentioned(self, message: Message) -> bool:
-        return self.client.user is not None and is_bot_mentioned(message, self.client.user)
-
-    def has_command_prefix(self, message: Message) -> bool:
-        return self.command_prefix is not None and message.content.startswith(self.command_prefix)
-
-    def get_command_from_message(self, message: Message) -> str | None:
-        """
-        Get the bot command string from a raw Discord message.
-
-        If the message is not a bot command, return None.
-        """
-        # all mentions are automatically interpreted as commands
-        if self.client.user is not None and self.is_bot_mentioned(message):
-            command = re.sub(
-                get_bot_mention_regex(message, self.client.user), "", message.content, count=1
-            ).strip()
-            return command
-
-        # alternatively, commands can be prefixed with a string to indicate they are for the bot
-        elif self.has_command_prefix(message):
-            command = message.content[len(self.command_prefix or "") :].strip()
-            return command
-
-        return None
-
-    def get_command_handler(self, command: str) -> tuple[Callable, re.Match] | None:
-        for pattern, handler in _discord_bot_commands.items():
-            match = pattern.match(command)
-            if match:
-                return handler, match
-        return None
-
     async def on_message(self, message: Message) -> None:
-        if message.author.bot:
+        if message.author.bot or self.client.user is None:
             return
 
-        command = self.get_command_from_message(message)
-        if command is None:
-            return
-
-        command_handler = self.get_command_handler(command)
-        if command_handler is None:
-            if self.is_bot_mentioned(message) and not self.has_command_prefix(message):
-                self.agent_worker.queue_turn(message)
-            return
-
-        _logger.info(f"Received command: {command}")
-        handler, match = command_handler
-        try:
-            await handler(self, message, match)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            await message.channel.send(
-                f"Sorry {message.author.mention}! Something went wrong while running your"
-                f" command.```{traceback.format_exc()[-1900:]}```"
-            )
-            raise
+        if is_bot_mentioned(message, self.client.user):
+            self.agent_worker.queue_turn(message)
 
     async def on_reaction_change(
         self, action: ReactionAction, payload: RawReactionActionEvent
@@ -171,55 +105,8 @@ class DiscordBot:
                 raise ValueError(f"user {payload.user_id} not found")
             await self.reaction_handlers[payload.message_id](action, payload.emoji, user)
 
-    @staticmethod
-    def command(r: str) -> Callable[..., Any]:
-        """
-        Decorator for defining bot commands matching a given regex.
-
-        After receiving a command, the bot will call the first @command function whose regex
-        matches the given command.
-        """
-
-        def deco(f: Callable[..., Any]) -> Callable[..., Any]:
-            _discord_bot_commands[re.compile(f"^{r}$", re.IGNORECASE)] = f
-            return f
-
-        return deco
-
     def affirm(self) -> str:
         return random.choice(AFFIRMATIONS)
-
-    def thank(self) -> str:
-        return random.choice(THANKS)
-
-    @command(r"e refresh")
-    async def refresh_events(self, message: Message, _command: re.Match) -> None:
-        await initialize_events(self)
-        await message.channel.send(f"{self.affirm()} {message.author.mention}")
-
-    @command(r"sync_commands")
-    async def sync_commands(self, message: Message, command: re.Match) -> None:
-        if message.guild is None:
-            raise ValueError("Guild is none")
-        _logger.info("Syncing commands")
-        await self.tree.sync(guild=message.guild)  # type: ignore
-
-    @command(r"whois (?P<user_id>.+)")
-    async def whois(self, message: Message, command: re.Match) -> None:
-        if message.guild is None:
-            raise ValueError("Guild is none")
-        user_id = int(command.group("user_id"))
-        if member := message.guild.get_member(user_id):
-            if member.nick:
-                await message.channel.send(f"{member.nick} ({member.name})")
-            else:
-                await message.channel.send(member.name)
-        elif user := self.client.get_user(user_id):
-            await message.channel.send(f"{user.name} (Not a member of the server)")
-        else:
-            await message.channel.send(
-                f"Sorry {message.author.mention}, I couldn't find a user with ID {user_id}."
-            )
 
 
 async def start() -> None:
