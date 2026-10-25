@@ -162,3 +162,11 @@ def is_conversation_running(session: Session, conversation_id: int) -> bool:
         .first()
         is not None
     )
+
+
+def get_turn_count(session: Session, conversation_id: int, status: AgentTurnStatus) -> int:
+    return (
+        session.query(AgentTurn)
+        .filter(AgentTurn.conversation_id == conversation_id, AgentTurn.status == status)
+        .count()
+    )

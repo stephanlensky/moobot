@@ -13,6 +13,7 @@ from typing import Any
 import discord
 from apscheduler.triggers.interval import IntervalTrigger
 from discord import (
+    AllowedMentions,
     Interaction,
     Member,
     Message,
@@ -22,7 +23,10 @@ from discord import (
     app_commands,
 )
 
+from moobot.agent.history import get_bot_mention_regex, is_bot_mentioned
+from moobot.agent.worker import AgentWorker
 from moobot.db.session import Session
+from moobot.discord.commands.agent import agent_group
 from moobot.discord.commands.create_event import create_event_cmd
 from moobot.discord.commands.delete_event import delete_event_cmd
 from moobot.discord.commands.update_event import update_event_cmd
@@ -64,8 +68,10 @@ class DiscordBot:
         self.threadpool_scheduler = get_threadpool_scheduler()
 
         self.reaction_handlers: dict[int, ReactionHandler] = {}  # message ID -> reaction handler
+        self.agent_worker = AgentWorker(self)
 
     async def on_ready(self) -> None:
+        self.agent_worker.start_queued_workers()
         self.scheduler.add_job(
             initialize_events,
             args=(self,),
@@ -83,6 +89,12 @@ class DiscordBot:
             self.tree.copy_global_to(guild=guild)  # type: ignore
             await self.tree.sync(guild=guild)  # type: ignore
 
+    def is_bot_mentioned(self, message: Message) -> bool:
+        return self.client.user is not None and is_bot_mentioned(message, self.client.user)
+
+    def has_command_prefix(self, message: Message) -> bool:
+        return self.command_prefix is not None and message.content.startswith(self.command_prefix)
+
     def get_command_from_message(self, message: Message) -> str | None:
         """
         Get the bot command string from a raw Discord message.
@@ -90,43 +102,52 @@ class DiscordBot:
         If the message is not a bot command, return None.
         """
         # all mentions are automatically interpreted as commands
-        if self.client.user is not None and self.client.user.mentioned_in(message):
-            mention_regex = rf"<@!?{self.client.user.id}>"
-            command = re.sub(mention_regex, "", message.content, 1).strip()
+        if self.client.user is not None and self.is_bot_mentioned(message):
+            command = re.sub(
+                get_bot_mention_regex(message, self.client.user), "", message.content, count=1
+            ).strip()
             return command
 
         # alternatively, commands can be prefixed with a string to indicate they are for the bot
-        elif self.command_prefix is not None and message.content.startswith(self.command_prefix):
-            command = message.content[len(self.command_prefix) :].strip()
+        elif self.has_command_prefix(message):
+            command = message.content[len(self.command_prefix or "") :].strip()
             return command
 
         return None
 
+    def get_command_handler(self, command: str) -> tuple[Callable, re.Match] | None:
+        for pattern, handler in _discord_bot_commands.items():
+            match = pattern.match(command)
+            if match:
+                return handler, match
+        return None
+
     async def on_message(self, message: Message) -> None:
-        # if this bot sent the message, never do anything
-        if message.author == self.client.user:
+        if message.author.bot:
             return
 
-        # check if the message is a command and pass it to the appropriate command handler
         command = self.get_command_from_message(message)
         if command is None:
             return
 
+        command_handler = self.get_command_handler(command)
+        if command_handler is None:
+            if self.is_bot_mentioned(message) and not self.has_command_prefix(message):
+                self.agent_worker.queue_turn(message)
+            return
+
         _logger.info(f"Received command: {command}")
-        for pattern, handler in _discord_bot_commands.items():
-            match = pattern.match(command)
-            if match:
-                try:
-                    await handler(self, message, match)
-                except asyncio.CancelledError:
-                    raise
-                except Exception:
-                    await message.channel.send(
-                        f"Sorry {message.author.mention}! Something went wrong while running your"
-                        f" command.```{traceback.format_exc()[-1900:]}```"
-                    )
-                    raise
-                break
+        handler, match = command_handler
+        try:
+            await handler(self, message, match)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            await message.channel.send(
+                f"Sorry {message.author.mention}! Something went wrong while running your"
+                f" command.```{traceback.format_exc()[-1900:]}```"
+            )
+            raise
 
     async def on_reaction_change(
         self, action: ReactionAction, payload: RawReactionActionEvent
@@ -205,7 +226,7 @@ async def start() -> None:
         reactions=True,
         members=True,
     )
-    client = discord.Client(intents=intents)
+    client = discord.Client(intents=intents, allowed_mentions=AllowedMentions(everyone=False))
     discord_bot: DiscordBot = DiscordBot(client)
 
     @client.event
@@ -224,6 +245,8 @@ async def start() -> None:
     @client.event
     async def on_raw_reaction_remove(payload: RawReactionActionEvent) -> None:
         await discord_bot.on_reaction_change(ReactionAction.REMOVED, payload)
+
+    discord_bot.tree.add_command(agent_group)
 
     @discord_bot.tree.command(  # type: ignore
         name="create_event", description="Create a new event on the Moobloom calendar."

@@ -10,6 +10,7 @@ from moobot.db.crud.agent import (
     get_channel_ids_with_queued_turns,
     get_next_queued_turn,
     get_or_create_active_conversation,
+    get_turn_count,
     is_conversation_running,
     reset_running_turns,
     set_last_seen_message_id,
@@ -194,3 +195,17 @@ def test_get_channel_ids_with_queued_turns__returns_channels_with_queued_turns(
     set_turn_running(session, other_turn.id)
 
     assert get_channel_ids_with_queued_turns(session) == [CHANNEL_ID]
+
+
+def test_get_turn_count__counts_turns_with_status(session: Session) -> None:
+    conversation = get_or_create_active_conversation(session, CHANNEL_ID)
+    other_conversation = get_or_create_active_conversation(session, OTHER_CHANNEL_ID)
+    _create_turn(session, conversation.id, message_id=1)
+    _create_turn(session, conversation.id, message_id=2)
+    running = _create_turn(session, conversation.id, message_id=3)
+    _create_turn(session, other_conversation.id, message_id=4)
+    set_turn_running(session, running.id)
+
+    assert get_turn_count(session, conversation.id, AgentTurnStatus.QUEUED) == 2
+    assert get_turn_count(session, conversation.id, AgentTurnStatus.RUNNING) == 1
+    assert get_turn_count(session, conversation.id, AgentTurnStatus.FAILED) == 0

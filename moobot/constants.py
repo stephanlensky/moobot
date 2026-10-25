@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 GOOGLE_CALENDAR_SYNC_ENABLE_DM_TEMPLATE = (
     "**Mooooo!** :cow:\n\nTo finish setting up Google Calendar sync,"
     " [authorize access to your Google account]({auth_url}).\n\nAfter authorizing access, your"
@@ -15,3 +17,10 @@ GOOGLE_CALENDAR_SYNC_TOKEN_NOT_AUTHORIZED = (
     " to continue syncing to Google Calendar, please reauthorize Moobot by removing and readding"
     " your Google Calendar reaction on the calendar page."
 )
+
+DISCORD_MESSAGE_LENGTH_LIMIT = 2000
+AGENT_CONTEXT_MESSAGE_LIMIT = 15
+AGENT_CONTEXT_MAX_AGE = timedelta(hours=24)
+AGENT_TURN_FAILED_MESSAGE = "Sorry {mention}! Something went wrong while I was working on that."
+AGENT_CONVERSATION_CLEARED_MESSAGE = "Okay, I've cleared our conversation in this channel."
+AGENT_NO_CONVERSATION_MESSAGE = "There's no conversation to clear in this channel."
