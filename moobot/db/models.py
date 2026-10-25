@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from enum import Enum
 
-from sqlalchemy import DateTime, ForeignKey, Index, func, text
+from sqlalchemy import DateTime, ForeignKey, Index, UniqueConstraint, func, text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, validates
 
 from moobot.settings import get_settings
@@ -111,6 +111,7 @@ class GoogleApiAuthSession(Base):
     state: Mapped[str] = mapped_column(unique=True)
     code_verifier: Mapped[str]
     user_id: Mapped[str] = mapped_column()
+    calendar_type: Mapped[str]
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
 
@@ -125,7 +126,23 @@ class GoogleApiUser(Base):
     token_uri: Mapped[str]
     scopes: Mapped[str]
 
-    # Discord bot server must send a DM and create events for existing RSVPs before setup is finished
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+class GoogleCalendarType(str, Enum):
+    EVENTS = "events"
+    BIRTHDAYS = "birthdays"
+
+
+class GoogleCalendarSync(Base):
+    __tablename__ = "googlecalendarsync"
+    __table_args__ = (UniqueConstraint("user_id", "calendar_type"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str]
+    calendar_type: Mapped[str]
+
+    # Discord bot server must send a DM and create the existing events before setup is finished
     setup_finished: Mapped[bool] = mapped_column(default=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
@@ -133,12 +150,26 @@ class GoogleApiUser(Base):
 
 class GoogleCalendar(Base):
     __tablename__ = "googlecalendar"
+    __table_args__ = (UniqueConstraint("user_id", "calendar_type"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[str] = mapped_column(unique=True)
+    user_id: Mapped[str]
+    calendar_type: Mapped[str]
     calendar_id: Mapped[str]
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+
+
+class Birthday(Base):
+    __tablename__ = "birthday"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(unique=True)
+    month: Mapped[int]
+    day: Mapped[int]
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
 
 
 class AgentConversation(Base):

@@ -72,7 +72,7 @@ def test_get_transcript_start_index__keeps_tool_calls_with_outputs() -> None:
 
 def test_is_transcript_note__detects_only_notes() -> None:
     assert is_transcript_note(
-        {"role": "user", "content": "[Event form update, not a message] Alice created the event"}
+        {"role": "user", "content": "[Button update, not a message] Alice created the event"}
     )
     assert not is_transcript_note({"role": "user", "content": "question 0"})
     assert not is_transcript_note(_get_turn_items(0)[4])
@@ -81,7 +81,7 @@ def test_is_transcript_note__detects_only_notes() -> None:
 def test_get_transcript_start_index__notes__do_not_count_as_turns() -> None:
     note: TResponseInputItem = {
         "role": "user",
-        "content": "[Event form update, not a message] Alice created the event",
+        "content": "[Button update, not a message] Alice created the event",
     }
     transcript = [*_get_turn_items(0), note, *_get_turn_items(1), note, *_get_turn_items(2)]
 

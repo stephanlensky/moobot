@@ -35,10 +35,12 @@ class Settings(BaseSettings):
     rsvp_no_emoji: str = "❌"
     get_all_event_channels_react_emoji_name: str
     google_calendar_sync_react_emoji_name: str
+    google_calendar_birthday_sync_react_emoji: str = "🎂"
     all_events_role_name: str
     active_events_category_name: str
 
     google_calendar_sync_calendar_name: str = "Moobloom Events"
+    google_calendar_sync_birthday_calendar_name: str = "Moobloom Birthdays"
 
     # google api credentials for gcalendar integration
     google_client_id: str

@@ -39,3 +39,7 @@ def get_delete_cancelled_note(user: User, event_id: int, event_name: str) -> str
         f"{AGENT_TRANSCRIPT_NOTE_PREFIX} {get_note_author(user)} clicked Cancel instead of deleting"
         f' the event "{event_name}" (id {event_id}), so it was not deleted.'
     )
+
+
+def get_calendar_sync_note(user: User, action: str, label: str) -> str:
+    return f"{AGENT_TRANSCRIPT_NOTE_PREFIX} {get_note_author(user)} {action} {label}."

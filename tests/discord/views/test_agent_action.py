@@ -11,6 +11,9 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from moobot.constants import (
     AGENT_ACTION_ALREADY_USED_MESSAGE,
+    AGENT_CALENDAR_SYNC_DM_FAILED_MESSAGE,
+    AGENT_CALENDAR_SYNC_STARTED_MESSAGES,
+    AGENT_CALENDAR_SYNC_STOPPED_MESSAGES,
     AGENT_EVENT_CREATED_MESSAGES,
     AGENT_EVENT_DELETE_CANCELLED_MESSAGES,
     AGENT_EVENT_DELETED_MESSAGES,
@@ -18,7 +21,7 @@ from moobot.constants import (
     AGENT_NOT_YOUR_BUTTON_MESSAGES,
     AGENT_REPLY_ALLOWED_MENTIONS,
 )
-from moobot.db.models import MoobloomEvent
+from moobot.db.models import GoogleCalendarType, MoobloomEvent
 from moobot.discord.commands.update_event import UpdateEventError
 from moobot.discord.views.agent_action import (
     AgentActionView,
@@ -26,6 +29,8 @@ from moobot.discord.views.agent_action import (
     CreateEventView,
     DeleteEventView,
     EventFields,
+    StartCalendarSyncView,
+    StopCalendarSyncView,
     UpdateEventView,
     get_not_your_button_message,
 )
@@ -34,7 +39,7 @@ from moobot.discord.views.event_modal import CreateEventModal, EventTime
 AUTHOR_ID = 42
 OTHER_USER_ID = 7
 CHANNEL_ID = 1234
-NOTE_PREFIX = "[Event form update, not a message]"
+NOTE_PREFIX = "[Button update, not a message]"
 SEPTEMBER_21_TIME = EventTime(
     start_date=date(2026, 9, 21),
     start_time=datetime(2026, 9, 21, 19),  # noqa: DTZ001
@@ -682,3 +687,99 @@ def test_send_confirmation__reply_fails__logs_warning() -> None:
     original_message.reply.assert_awaited_once_with(
         "ok Hayride", allowed_mentions=AGENT_REPLY_ALLOWED_MENTIONS
     )
+
+
+def test_start_calendar_sync_view__click__enables_sync_confirms_and_adds_note(
+    mocker: MockerFixture,
+) -> None:
+    enable = mocker.patch("moobot.discord.views.agent_action.enable_calendar_sync", AsyncMock())
+    bot = _get_bot()
+    original_message = _get_original_message()
+    interaction = _get_interaction()
+
+    async def click() -> StartCalendarSyncView:
+        view = StartCalendarSyncView(bot, AUTHOR_ID, original_message, GoogleCalendarType.BIRTHDAYS)
+        await view.start.callback(interaction)
+        return view
+
+    view = _run(click)
+
+    enable.assert_awaited_once_with(interaction.user, GoogleCalendarType.BIRTHDAYS)
+    interaction.response.edit_message.assert_awaited_once_with(view=view)
+    assert [button.disabled for button in _get_buttons(view)] == [True]
+    _assert_confirmation_reply(
+        original_message, AGENT_CALENDAR_SYNC_STARTED_MESSAGES, "birthday sync"
+    )
+    assert _get_note(bot) == (
+        f"{NOTE_PREFIX} {_get_author(AUTHOR_ID)} clicked the button and got a DM to finish setting"
+        " up Google Calendar birthday sync."
+    )
+
+
+def test_stop_calendar_sync_view__click__disables_sync_confirms_and_adds_note(
+    mocker: MockerFixture,
+) -> None:
+    disable = mocker.patch("moobot.discord.views.agent_action.disable_calendar_sync", AsyncMock())
+    bot = _get_bot()
+    original_message = _get_original_message()
+    interaction = _get_interaction()
+
+    async def click() -> StopCalendarSyncView:
+        view = StopCalendarSyncView(bot, AUTHOR_ID, original_message, GoogleCalendarType.EVENTS)
+        await view.stop_sync.callback(interaction)
+        return view
+
+    _run(click)
+
+    disable.assert_awaited_once_with(
+        interaction.user, GoogleCalendarType.EVENTS, notify_if_not_enabled=True
+    )
+    _assert_confirmation_reply(original_message, AGENT_CALENDAR_SYNC_STOPPED_MESSAGES, "event sync")
+    assert _get_note(bot) == (
+        f"{NOTE_PREFIX} {_get_author(AUTHOR_ID)} clicked the button and turned off Google Calendar"
+        " sync."
+    )
+
+
+def test_start_calendar_sync_view__dm_forbidden__sends_ephemeral_error(
+    mocker: MockerFixture,
+) -> None:
+    mocker.patch(
+        "moobot.discord.views.agent_action.enable_calendar_sync",
+        AsyncMock(side_effect=discord.Forbidden(MagicMock(status=403), "Cannot send messages")),
+    )
+    bot = _get_bot()
+    original_message = _get_original_message()
+    interaction = _get_interaction()
+
+    async def click() -> None:
+        view = StartCalendarSyncView(bot, AUTHOR_ID, original_message, GoogleCalendarType.EVENTS)
+        await view.start.callback(interaction)
+
+    _run(click)
+
+    interaction.followup.send.assert_awaited_once_with(
+        AGENT_CALENDAR_SYNC_DM_FAILED_MESSAGE, ephemeral=True
+    )
+    original_message.reply.assert_not_awaited()
+    bot.agent_worker.add_transcript_note.assert_not_awaited()
+
+
+def test_start_calendar_sync_view__easter_egg__enables_sync_for_clicker(
+    mocker: MockerFixture, counter: ButtonAttemptCounter
+) -> None:
+    enable = mocker.patch("moobot.discord.views.agent_action.enable_calendar_sync", AsyncMock())
+    for _ in range(29):
+        counter.add_attempt(OTHER_USER_ID)
+    interaction = _get_interaction(OTHER_USER_ID)
+
+    async def click() -> None:
+        view = StartCalendarSyncView(
+            _get_bot(), AUTHOR_ID, _get_original_message(), GoogleCalendarType.EVENTS
+        )
+        assert await view.interaction_check(interaction)
+        await view.start.callback(interaction)
+
+    _run(click)
+
+    enable.assert_awaited_once_with(interaction.user, GoogleCalendarType.EVENTS)

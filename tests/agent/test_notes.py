@@ -6,7 +6,7 @@ import pytest
 from moobot.agent.notes import get_delete_cancelled_note, get_event_channel, get_event_note
 from moobot.db.models import MoobloomEvent
 
-PREFIX = "[Event form update, not a message]"
+PREFIX = "[Button update, not a message]"
 
 
 def _get_user() -> MagicMock:

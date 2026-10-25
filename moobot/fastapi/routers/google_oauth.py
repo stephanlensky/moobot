@@ -6,7 +6,8 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from starlette.templating import _TemplateResponse
 
-from moobot.db.crud.google import create_api_user, get_auth_session_by_state
+from moobot.db.crud.google import add_calendar_sync, get_auth_session_by_state, set_api_user
+from moobot.db.models import GoogleCalendarType
 from moobot.db.session import get_session
 from moobot.util.google import fetch_credentials
 
@@ -38,17 +39,19 @@ def handle_oauth_response(
 
     user_id = int(auth_session.user_id)
     code_verifier = auth_session.code_verifier
+    calendar_type = GoogleCalendarType(auth_session.calendar_type)
     session.delete(auth_session)
 
     credentials = fetch_credentials(code, code_verifier)
-    create_api_user(
+    set_api_user(
         session,
         user_id=user_id,
         token=credentials.token,
         refresh_token=credentials.refresh_token,
         token_uri=credentials.token_uri,
         scopes=credentials.scopes,
-        commit=True,
+        commit=False,
     )
+    add_calendar_sync(session, user_id, calendar_type, commit=True)
 
     return templates.TemplateResponse(request, "google_oauth.html", {"message": "✅ Success!"})

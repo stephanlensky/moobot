@@ -25,6 +25,7 @@ from discord import (
 
 from moobot.agent.history import get_bot_mention_regex, is_bot_mentioned
 from moobot.agent.worker import AgentWorker
+from moobot.calendar_sync import complete_unfinished_google_calendar_setups
 from moobot.db.session import Session
 from moobot.discord.commands.agent import agent_group
 from moobot.discord.commands.create_event import create_event_cmd
@@ -32,7 +33,7 @@ from moobot.discord.commands.delete_event import delete_event_cmd
 from moobot.discord.commands.update_event import update_event_cmd
 from moobot.discord.commands.whos_going import whos_going_cmd
 from moobot.discord.event_option import event_autocomplete, get_event_from_option
-from moobot.events import complete_unfinished_google_calendar_setups, initialize_events
+from moobot.events import initialize_events
 from moobot.scheduler import get_async_scheduler, get_threadpool_scheduler
 from moobot.settings import get_settings
 from moobot.util.time import now as local_now

@@ -3,21 +3,23 @@ from datetime import timedelta
 from discord import AllowedMentions
 
 GOOGLE_CALENDAR_SYNC_ENABLE_DM_TEMPLATE = (
-    "**Mooooo!** :cow:\n\nTo finish setting up Google Calendar sync,"
-    " [authorize access to your Google account]({auth_url}).\n\nAfter authorizing access, your"
-    " RSVPs will be automatically synced to your Google Calendar."
+    "**Mooooo!** :cow:\n\nTo finish setting up {label},"
+    " [authorize access to your Google account]({auth_url}).\n\nAfter authorizing access,"
+    " {description} will be automatically synced to your Google Calendar."
 )
-GOOGLE_CALENDAR_SYNC_ENABLE_USER_EXISTS_DM = (
-    "Hm... you added a reaction to enable Google Calendar syncing, but sync was already enabled! I"
-    " won't do anything. To disable syncing, remove your reaction."
+GOOGLE_CALENDAR_SYNC_ALREADY_ENABLED_DM = (
+    "Hm... {label} is already enabled, so I won't do anything. To disable it, remove your reaction"
+    " on the calendar page or ask me to stop it."
 )
-GOOGLE_CALENDAR_SYNC_DISABLE_DM = "Google Calendar sync has been successfully disabled."
-GOOGLE_CALENDAR_SYNC_SETUP_COMPLETE_DM = "Google calendar sync has been set up successfully."
+GOOGLE_CALENDAR_SYNC_NOT_ENABLED_DM = "Hm... {label} isn't enabled, so there's nothing to disable."
+GOOGLE_CALENDAR_SYNC_DISABLE_DM = "{label} has been successfully disabled."
+GOOGLE_CALENDAR_SYNC_SETUP_COMPLETE_DM = "{label} has been set up successfully."
 GOOGLE_CALENDAR_SYNC_TOKEN_NOT_AUTHORIZED = (
-    "Hi {name}, I just tried syncing your RSVPs to Google Calendar, but it seems like Moobot's"
-    " authorization to your Google account has either expired or been revoked.\n\nIf you would like"
-    " to continue syncing to Google Calendar, please reauthorize Moobot by removing and readding"
-    " your Google Calendar reaction on the calendar page."
+    "Hi {name}, I just tried syncing to your Google Calendar, but it seems like Moobot's"
+    " authorization to your Google account has either expired or been revoked, so all of your"
+    " Google Calendar syncing has been disabled.\n\nIf you would like to continue syncing to"
+    " Google Calendar, please reauthorize Moobot by removing and re-adding your reaction on the"
+    " calendar page, or by asking me to set up sync again."
 )
 
 DISCORD_MESSAGE_LENGTH_LIMIT = 2000
@@ -84,7 +86,7 @@ AGENT_ACTION_ALREADY_USED_MESSAGE = "mooo that button already got used"
 AGENT_REPLY_ALLOWED_MENTIONS = AllowedMentions(
     everyone=False, roles=False, users=True, replied_user=True
 )
-AGENT_TRANSCRIPT_NOTE_PREFIX = "[Event form update, not a message]"
+AGENT_TRANSCRIPT_NOTE_PREFIX = "[Button update, not a message]"
 AGENT_EVENT_CREATED_MESSAGES = [
     "ok {name} is on the calendar moo. dont be late",
     "mooo {name} is official now. its on teh calendar",
@@ -134,3 +136,30 @@ AGENT_EVENT_DELETE_CANCELLED_MESSAGES = [
     "ok keeping {name} moo. i liked that one anyway",
     "{name} stays on the calendar moo. crisis averted",
 ]
+AGENT_CALENDAR_SYNC_STARTED_MESSAGES = [
+    "ok {mention} check ur dms for the {name} stuff moo",
+    "mooo sent u a dm {mention}. {name} is almost set up",
+    "{mention} check ur dms moo. {name} is like one click away",
+    "slid into ur dms {mention} moo. finish the {name} there",
+    "ok dm sent moo\ngo finish the {name} thing {mention}",
+    "{name} is happening moo. check ur dms {mention}",
+    "mooo {mention} ur dms have the {name} stuff. go go go",
+    "check ur dms {mention}\nwait theres a bird\nok yea the {name} stuff is in there moo",
+    "ok {mention} dm'd u moo. {name} is basically done",
+    "{mention} ur {name} stuff is in ur dms moooo",
+]
+AGENT_CALENDAR_SYNC_STOPPED_MESSAGES = [
+    "ok {mention} {name} is off moo",
+    "mooo stopped the {name} for {mention}. sent u a dm",
+    "{name} is off now {mention} moo. ur calendar can rest",
+    "done moo no more {name} for {mention}",
+    "ok {name} is turned off moo\nfreedom",
+    "{mention} turned off {name} moo. check ur dms",
+    "stopped {name} moo. byeee",
+    "ok {mention} {name} is gone moo. ur calendar is free",
+    "mooo {name} is off {mention}. it was fun while it lasted",
+    "{name} is off moo. back to grazing",
+]
+AGENT_CALENDAR_SYNC_DM_FAILED_MESSAGE = (
+    "moo i couldnt dm u. turn on dms from server members in ur privacy settings and ask me again"
+)

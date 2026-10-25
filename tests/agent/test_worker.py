@@ -561,7 +561,7 @@ def test_worker__failure_after_tool_queues_view__sends_no_view(
     )
 
 
-NOTE = '[Event form update, not a message] Alice (@alice, <@42>) created the event "Hayride" (id 1)'
+NOTE = '[Button update, not a message] Alice (@alice, <@42>) created the event "Hayride" (id 1)'
 
 
 def _get_stored_transcripts(mocks: Mocks) -> dict[str, list]:

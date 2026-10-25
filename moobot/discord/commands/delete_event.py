@@ -6,15 +6,12 @@ from typing import TYPE_CHECKING
 
 from discord import Interaction
 
+from moobot.calendar_sync import handle_google_calendar_sync_on_rsvp
 from moobot.db.crud.events import get_event_by_id
 from moobot.db.models import MoobloomEvent, MoobloomEventAttendanceType
 from moobot.db.session import Session
 from moobot.discord.views.confirm_delete import ConfirmDelete
-from moobot.events import (
-    delete_event_announcement,
-    handle_google_calendar_sync_on_rsvp,
-    initialize_events,
-)
+from moobot.events import delete_event_announcement, initialize_events
 
 if TYPE_CHECKING:
     from moobot.discord.discord_bot import DiscordBot

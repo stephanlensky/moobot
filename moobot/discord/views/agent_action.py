@@ -11,12 +11,20 @@ from typing import TYPE_CHECKING, Any
 import discord
 from discord import Interaction, Message
 
-from moobot.agent.notes import get_delete_cancelled_note, get_event_note
+from moobot.agent.notes import get_calendar_sync_note, get_delete_cancelled_note, get_event_note
+from moobot.calendar_sync import (
+    CALENDAR_SYNC_LABELS,
+    disable_calendar_sync,
+    enable_calendar_sync,
+)
 from moobot.constants import (
     AGENT_ACTION_ALREADY_USED_MESSAGE,
     AGENT_ACTION_VIEW_TIMEOUT,
     AGENT_BUTTON_ATTEMPT_TTL,
     AGENT_BUTTON_EASTER_EGG_ATTEMPTS,
+    AGENT_CALENDAR_SYNC_DM_FAILED_MESSAGE,
+    AGENT_CALENDAR_SYNC_STARTED_MESSAGES,
+    AGENT_CALENDAR_SYNC_STOPPED_MESSAGES,
     AGENT_EVENT_CREATED_MESSAGES,
     AGENT_EVENT_DELETE_CANCELLED_MESSAGES,
     AGENT_EVENT_DELETED_MESSAGES,
@@ -25,7 +33,7 @@ from moobot.constants import (
     AGENT_REPLY_ALLOWED_MENTIONS,
 )
 from moobot.db.crud.events import get_event_by_id
-from moobot.db.models import MoobloomEvent
+from moobot.db.models import GoogleCalendarType, MoobloomEvent
 from moobot.db.session import Session
 from moobot.discord.commands.create_event import create_event
 from moobot.discord.commands.delete_event import delete_event
@@ -40,6 +48,11 @@ if TYPE_CHECKING:
     from moobot.discord.discord_bot import DiscordBot
 
 _logger = logging.getLogger(__name__)
+
+CALENDAR_SYNC_NAMES = {
+    GoogleCalendarType.EVENTS: "event sync",
+    GoogleCalendarType.BIRTHDAYS: "birthday sync",
+}
 
 
 @dataclass
@@ -309,3 +322,85 @@ class DeleteEventView(AgentActionView):
         await self.add_transcript_note(
             get_delete_cancelled_note(interaction.user, self.event_id, self.event_name)
         )
+
+
+class CalendarSyncView(AgentActionView):
+    confirmation_messages: list[str]
+    note_action: str
+
+    def __init__(
+        self,
+        bot: DiscordBot,
+        author_id: int,
+        original_message: Message,
+        calendar_type: GoogleCalendarType,
+        label: str,
+    ) -> None:
+        super().__init__(bot, author_id, original_message, f"{label}: {calendar_type.value}")
+        self.calendar_type = calendar_type
+
+    async def set_calendar_sync(self, interaction: Interaction) -> None:
+        raise NotImplementedError
+
+    async def handle_click(self, interaction: Interaction) -> None:
+        self.used = True
+        self.disable_buttons()
+        await interaction.response.edit_message(view=self)
+        try:
+            await self.set_calendar_sync(interaction)
+        except discord.Forbidden:
+            _logger.warning(f"Failed to DM user {interaction.user.id} for view {self.label}")
+            await interaction.followup.send(AGENT_CALENDAR_SYNC_DM_FAILED_MESSAGE, ephemeral=True)
+            return
+        await self.send_confirmation(
+            interaction, self.confirmation_messages, CALENDAR_SYNC_NAMES[self.calendar_type]
+        )
+        await self.add_transcript_note(
+            get_calendar_sync_note(
+                interaction.user, self.note_action, CALENDAR_SYNC_LABELS[self.calendar_type]
+            )
+        )
+
+
+class StartCalendarSyncView(CalendarSyncView):
+    confirmation_messages = AGENT_CALENDAR_SYNC_STARTED_MESSAGES
+    note_action = "clicked the button and got a DM to finish setting up"
+
+    def __init__(
+        self,
+        bot: DiscordBot,
+        author_id: int,
+        original_message: Message,
+        calendar_type: GoogleCalendarType,
+    ) -> None:
+        super().__init__(bot, author_id, original_message, calendar_type, "Start calendar sync")
+
+    async def set_calendar_sync(self, interaction: Interaction) -> None:
+        await enable_calendar_sync(interaction.user, self.calendar_type)
+
+    @discord.ui.button(label="Set up sync", style=discord.ButtonStyle.primary)
+    async def start(self, interaction: Interaction, button: discord.ui.Button) -> None:
+        await self.handle_click(interaction)
+
+
+class StopCalendarSyncView(CalendarSyncView):
+    confirmation_messages = AGENT_CALENDAR_SYNC_STOPPED_MESSAGES
+    note_action = "clicked the button and turned off"
+
+    def __init__(
+        self,
+        bot: DiscordBot,
+        author_id: int,
+        original_message: Message,
+        calendar_type: GoogleCalendarType,
+    ) -> None:
+        super().__init__(bot, author_id, original_message, calendar_type, "Stop calendar sync")
+
+    async def set_calendar_sync(self, interaction: Interaction) -> None:
+        await disable_calendar_sync(
+            interaction.user, self.calendar_type, notify_if_not_enabled=True
+        )
+
+    @discord.ui.button(label="Stop sync", style=discord.ButtonStyle.red)
+    async def stop_sync(self, interaction: Interaction, button: discord.ui.Button) -> None:
+        await self.handle_click(interaction)

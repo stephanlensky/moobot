@@ -74,6 +74,11 @@ def test_tools__includes_event_action_tools() -> None:
         "create_event",
         "update_event",
         "delete_event",
+        "get_birthdays",
+        "set_birthday",
+        "clear_birthday",
+        "start_calendar_sync",
+        "stop_calendar_sync",
     ]
 
 

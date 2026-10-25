@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import TYPE_CHECKING
 
 import google_auth_oauthlib.flow
@@ -10,7 +10,12 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from moobot.db.crud.google import create_auth_session
-from moobot.db.models import GoogleApiUser, MoobloomEvent, MoobloomEventAttendanceType
+from moobot.db.models import (
+    GoogleApiUser,
+    GoogleCalendarType,
+    MoobloomEvent,
+    MoobloomEventAttendanceType,
+)
 from moobot.db.session import Session
 from moobot.settings import get_settings
 
@@ -38,6 +43,9 @@ CLIENT_CONFIG = {
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.app.created"]
 
+# a leap year, so that february 29 birthdays have a valid start date
+BIRTHDAY_START_YEAR = 2000
+
 
 def _get_flow(code_verifier: str | None = None) -> google_auth_oauthlib.flow.Flow:
     flow = google_auth_oauthlib.flow.Flow.from_client_config(
@@ -48,7 +56,7 @@ def _get_flow(code_verifier: str | None = None) -> google_auth_oauthlib.flow.Flo
     return flow
 
 
-def get_google_auth_url(user_id: int) -> str:
+def get_google_auth_url(user_id: int, calendar_type: GoogleCalendarType) -> str:
     flow = _get_flow()
     authorization_url, state = flow.authorization_url(
         # Enable offline access so that you can refresh an access token without
@@ -59,7 +67,7 @@ def get_google_auth_url(user_id: int) -> str:
         include_granted_scopes="true",
     )
     with Session() as session:
-        create_auth_session(session, state, flow.code_verifier, user_id)
+        create_auth_session(session, state, flow.code_verifier, user_id, calendar_type)
 
     return authorization_url
 
@@ -94,8 +102,14 @@ def calendar_exists(service: CalendarResource, calendar_id: str) -> bool:
     return True
 
 
-def create_moobloom_events_calendar(service: CalendarResource) -> str:
-    calendar: Calendar = {"summary": settings.google_calendar_sync_calendar_name}
+def get_calendar_name(calendar_type: GoogleCalendarType) -> str:
+    if calendar_type == GoogleCalendarType.BIRTHDAYS:
+        return settings.google_calendar_sync_birthday_calendar_name
+    return settings.google_calendar_sync_calendar_name
+
+
+def create_calendar(service: CalendarResource, calendar_type: GoogleCalendarType) -> str:
+    calendar: Calendar = {"summary": get_calendar_name(calendar_type)}
     created_calendar = service.calendars().insert(body=calendar).execute()
     return created_calendar["id"]
 
@@ -104,7 +118,7 @@ def _build_gcalendar_event_id(event: MoobloomEvent) -> str:
     return f"moob{event.id}"
 
 
-def _build_gcalendar_event(
+def build_gcalendar_event(
     event: MoobloomEvent, attendance_type: MoobloomEventAttendanceType
 ) -> Event:
     start: EventDateTime
@@ -148,40 +162,74 @@ def _build_gcalendar_event(
     return gcalendar_event
 
 
-def add_or_update_event(
-    service: CalendarResource,
-    calendar_id: str,
-    event: MoobloomEvent,
-    attendance_type: MoobloomEventAttendanceType,
-) -> None:
-    gcalendar_event_id = _build_gcalendar_event_id(event)
-    existing_event = None
+def get_birthday_event_id(user_id: int) -> str:
+    # google event ids only allow the characters a-v and 0-9
+    return f"moobb{user_id}"
+
+
+def build_birthday_event(user_id: int, name: str, month: int, day: int) -> Event:
+    start_date = date(BIRTHDAY_START_YEAR, month, day)
+    recurrence = (
+        "RRULE:FREQ=YEARLY;BYMONTH=2;BYMONTHDAY=-1"
+        if (month, day) == (2, 29)
+        else "RRULE:FREQ=YEARLY"
+    )
+    return {
+        "id": get_birthday_event_id(user_id),
+        "summary": f"🎂 {name}'s birthday",
+        "start": {"date": start_date.isoformat()},
+        "end": {"date": (start_date + timedelta(days=1)).isoformat()},
+        "recurrence": [recurrence],
+        "transparency": "transparent",
+        "status": "confirmed",
+    }
+
+
+def get_gcalendar_event(
+    service: CalendarResource, calendar_id: str, gcalendar_event_id: str
+) -> Event | None:
     try:
-        existing_event = (
-            service.events().get(calendarId=calendar_id, eventId=gcalendar_event_id).execute()
-        )
+        return service.events().get(calendarId=calendar_id, eventId=gcalendar_event_id).execute()
     except HttpError as e:
         if e.status_code != 404:
             raise
+        return None
 
-    gcalendar_event: Event = _build_gcalendar_event(event, attendance_type)
-    # update existing event
+
+def set_gcalendar_event(
+    service: CalendarResource, calendar_id: str, gcalendar_event: Event
+) -> None:
+    gcalendar_event_id = gcalendar_event["id"]
+    summary = gcalendar_event["summary"]
+    existing_event = get_gcalendar_event(service, calendar_id, gcalendar_event_id)
     if existing_event is not None:
-        _logger.debug(f"Updating existing Google Calendar event {event.name}")
+        _logger.debug(f"Updating existing Google Calendar event {summary}")
         existing_event.update(gcalendar_event)
         service.events().update(
             calendarId=calendar_id, eventId=gcalendar_event_id, body=existing_event
         ).execute()
-        _logger.debug(f"Done updating existing Google Calendar event {event.name}")
-    # create new event
-    else:
-        _logger.debug(f"Creating new Google Calendar event {event.name}")
-        try:
-            service.events().insert(calendarId=calendar_id, body=gcalendar_event).execute()
-            _logger.debug(f"Done creating new Google Calendar event {event.name}")
-        except HttpError as e:
-            if e.status_code != 404:
-                raise
-            _logger.warning(
-                f"Error creating Google Calendar event {event.name}: Calendar does not exist"
-            )
+        _logger.debug(f"Done updating existing Google Calendar event {summary}")
+        return
+
+    _logger.debug(f"Creating new Google Calendar event {summary}")
+    try:
+        service.events().insert(calendarId=calendar_id, body=gcalendar_event).execute()
+        _logger.debug(f"Done creating new Google Calendar event {summary}")
+    except HttpError as e:
+        if e.status_code != 404:
+            raise
+        _logger.warning(f"Error creating Google Calendar event {summary}: Calendar does not exist")
+
+
+def cancel_gcalendar_event(
+    service: CalendarResource, calendar_id: str, gcalendar_event_id: str
+) -> None:
+    existing_event = get_gcalendar_event(service, calendar_id, gcalendar_event_id)
+    if existing_event is None or existing_event.get("status") == "cancelled":
+        return
+    # deleted event ids stay reserved by google, so cancel instead of deleting
+    existing_event["status"] = "cancelled"
+    service.events().update(
+        calendarId=calendar_id, eventId=gcalendar_event_id, body=existing_event
+    ).execute()
+    _logger.debug(f"Cancelled Google Calendar event {gcalendar_event_id}")
