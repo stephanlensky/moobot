@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     litellm_base_url: str = "http://litellm.litellm.svc.cluster.local/v1"
     litellm_api_key: str | None = None
     agent_model: str = "openrouter/z-ai/glm-5.3-flash"
+    agent_max_turns: int = 10
 
     # s3 storage for agent transcripts
     s3_endpoint_url: str = "http://seaweedfs.seaweedfs.svc.cluster.local:8333"
