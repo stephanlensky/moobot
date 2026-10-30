@@ -1,6 +1,6 @@
 ARG app_env=prod
 
-FROM python:3.14-slim-bookworm AS base
+FROM python:3.15-slim-bookworm AS base
 
 ENV PYTHONUNBUFFERED=1
 
